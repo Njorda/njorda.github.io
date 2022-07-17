@@ -14,3 +14,4 @@ theme = 'hugo-theme-cleanwhite'
   [[params.addtional_menus]]
   title =  "ABOUT"
   href =  "/about/"
+  
