@@ -1,4 +1,4 @@
-baseURL = 'http://example.org/'
+baseURL = 'https://Njorda.github.io'
 languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'hugo-theme-cleanwhite'
@@ -14,4 +14,3 @@ theme = 'hugo-theme-cleanwhite'
   [[params.addtional_menus]]
   title =  "ABOUT"
   href =  "/about/"
-  
