@@ -1,16 +1,18 @@
 <!doctype html><html><head>
 <meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge"><title> - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
+<meta http-equiv=x-ua-compatible content="IE=edge"><title>Trition with post and pre processing - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=description content="Trition with post and pre processing. This is based upon this repo
 In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
 <meta property="og:image" content>
-<meta property="og:title" content>
+<meta property="og:title" content="Trition with post and pre processing">
 <meta property="og:description" content="Trition with post and pre processing. This is based upon this repo
 In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://Njorda.github.io/post/2022-02-01-triton-ensemble/"><meta property="article:section" content="post">
+<meta property="og:url" content="https://Njorda.github.io/2023/02/01/Trition_with_post_and_pre_processing/"><meta property="article:section" content="post">
+<meta property="article:published_time" content="2023-02-01T00:00:00+00:00">
+<meta property="article:modified_time" content="2023-02-01T00:00:00+00:00">
 <meta name=twitter:card content="summary">
-<meta name=twitter:title content>
+<meta name=twitter:title content="Trition with post and pre processing">
 <meta name=twitter:description content="Trition with post and pre processing. This is based upon this repo
 In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
 <link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
@@ -30,8 +32,8 @@ In this blog post we will dig down in to how a Machine Learning(ML) model can be
 <main>
 <article>
 <div class=title>
-<h1 class=title></h1>
-<div class=meta>Posted on Jan 1, 0001</div>
+<h1 class=title>Trition with post and pre processing</h1>
+<div class=meta>Posted on Feb 1, 2023</div>
 </div>
 <section class=body>
 <h1 id=trition-with-post-and-pre-processing>Trition with post and pre processing.</h1>
