@@ -1,0 +1,334 @@
+<!doctype html><html><head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge"><title> - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="Trition with post and pre processing. This is based upon this repo
+In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
+<meta property="og:image" content>
+<meta property="og:title" content>
+<meta property="og:description" content="Trition with post and pre processing. This is based upon this repo
+In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://Njorda.github.io/post/2022-02-01-triton-ensemble/"><meta property="article:section" content="post">
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content>
+<meta name=twitter:description content="Trition with post and pre processing. This is based upon this repo
+In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using Nvidia triton. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons ensemble functionality Triton support multiple different backends(processing functionality) and in this case we will use the tensorRT backend for the model serving and the python backend to add the pre and post processing business logic.">
+<link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
+<link rel=stylesheet type=text/css media=screen href=https://Njorda.github.io/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css>
+</head>
+<body>
+<div class=content><header>
+<div class=main>
+<a href=https://Njorda.github.io>Njord tech blog</a>
+</div>
+<nav>
+<a href=/>Home</a>
+<a href=/posts>All posts</a>
+<a href=/about>About</a>
+</nav>
+</header>
+<main>
+<article>
+<div class=title>
+<h1 class=title></h1>
+<div class=meta>Posted on Jan 1, 0001</div>
+</div>
+<section class=body>
+<h1 id=trition-with-post-and-pre-processing>Trition with post and pre processing.</h1>
+<p>This is based upon <a href=https://github.com/Njorda/triton-ensemble>this repo</a></p>
+<p>In this blog post we will dig down in to how a Machine Learning(ML) model can be combined with pre and post processing steps using <a href=https://github.com/triton-inference-server/serve>Nvidia triton</a>. By combining the pre- and post processing the user can make a single call using GPRC or http. It should be noted that we in reality will not merge these processing steps in any way but link the calls together using Tritons <a href=https://github.com/triton-inference-server/python_backend/blob/3a60cfc7fb3525d1200ee179a1355fd813cccd28/README.md#business-logic-scripting>ensemble</a> functionality Triton support multiple different backends(processing functionality) and in this case we will use the <a href=https://github.com/triton-inference-server/tensorrt_backend>tensorRT backend</a> for the model serving and the <a href=https://github.com/triton-inference-server/python_backend>python backend</a> to add the pre and post processing business logic. TensorRT is a high-performance deep learning inference sdk, that includes a deep learning inference optimizer and runtime that delivers low latency and high throughput for inference applications. By using the python backend we will have the possibility to use python instead of interacting with triton through C++ which is often a lot more native to data scientists and machine learning engineers.</p>
+<h1 id=pre---and-postprocessing-using-python-backend-example><strong>Pre- and Postprocessing Using Python Backend Example</strong></h1>
+<p>We will extend upon the triton example <a href=https://github.com/triton-inference-server/python_backend/tree/3a60cfc7fb3525d1200ee179a1355fd813cccd28/examples/preprocessing>Preprocessing Using Python Backend Example</a> but walk over the part more in depth to explain not only the ensemble set up but also how to use triton.</p>
+<p>This example shows how to preprocess your inputs using Python backend before it is passed to the TensorRT model for inference and then postprocessed. This ensemble model includes an image preprocessing model (preprocess) and a TensorRT model (resnet50_trt) to do inference and a simple post processing step.</p>
+<h2 id=model>Model</h2>
+<p>The model will in this case be a pre trained <a href="https://arxiv.org/abs/1512.03385?context=cs">restnet50</a> which is exported to ONNX using pytorch. Restnet50 is a image classification model.</p>
+<p>The complete code can be found <a href>here</a></p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>resnet50 <span style=color:#f92672>=</span> models<span style=color:#f92672>.</span>resnet50(pretrained<span style=color:#f92672>=</span><span style=color:#66d9ef>True</span>)
+dummy_input <span style=color:#f92672>=</span> torch<span style=color:#f92672>.</span>randn(<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>3</span>, <span style=color:#ae81ff>224</span>, <span style=color:#ae81ff>224</span>)
+resnet50 <span style=color:#f92672>=</span> resnet50<span style=color:#f92672>.</span>eval()
+
+torch<span style=color:#f92672>.</span>onnx<span style=color:#f92672>.</span>export(resnet50,
+                    dummy_input,
+                    args<span style=color:#f92672>.</span>save,
+                    export_params<span style=color:#f92672>=</span><span style=color:#66d9ef>True</span>,
+                    opset_version<span style=color:#f92672>=</span><span style=color:#ae81ff>10</span>,
+                    do_constant_folding<span style=color:#f92672>=</span><span style=color:#66d9ef>True</span>,
+                    input_names<span style=color:#f92672>=</span>[<span style=color:#e6db74>&#39;input&#39;</span>],
+                    output_names<span style=color:#f92672>=</span>[<span style=color:#e6db74>&#39;output&#39;</span>],
+                    dynamic_axes<span style=color:#f92672>=</span>{
+                        <span style=color:#e6db74>&#39;input&#39;</span>: {
+                            <span style=color:#ae81ff>0</span>: <span style=color:#e6db74>&#39;batch_size&#39;</span>,
+                            <span style=color:#ae81ff>2</span>: <span style=color:#e6db74>&#34;height&#34;</span>,
+                            <span style=color:#ae81ff>3</span>: <span style=color:#e6db74>&#39;width&#39;</span>
+                        },
+                        <span style=color:#e6db74>&#39;output&#39;</span>: {
+                            <span style=color:#ae81ff>0</span>: <span style=color:#e6db74>&#39;batch_size&#39;</span>
+                        }
+                    })
+
+</code></pre></div><p>For how triton is configured the <code>input_names</code> and <code>output_names</code> are important, but we will comeback to this later when we discuss the model configurations for the ensemble.</p>
+<p>As mentioned earlier we will use tensorRT to optimize the serving. So how do we go from the ONNX format to tensorRT? Nvidia has release a cli tool which allows for compiling from different formats to tensorRT, in this case from ONNX to tensorRT.</p>
+<p>Here we set the arguments for enabling fp16 precision &ndash;fp16. To enable dynamic shapes use &ndash;minShapes, &ndash;optShapes, and maxShapes with &ndash;explicitBatch:</p>
+<pre tabindex=0><code>$ trtexec --onnx=model.onnx --saveEngine=./model_repository/resnet50_trt/1/model.plan --explicitBatch --minShapes=input:1x3x224x224 --optShapes=input:1x3x224x224 --maxShapes=input:256x3x224x224 --fp16
+</code></pre><p>We will walk through the exact setup step by step using the docker container supplied by nvidia to avoid installing and limit issues with setups. The code can be found <a href=/onnx_exporter.py>here</a></p>
+<h2 id=preprocessing>Preprocessing</h2>
+<p>The python backend requires that the &ldquo;Model&rdquo;(a model is in this case the preprocessing, restnet50 and postprocessing or for that sake any processing you wan triton to do) to implement a class named <a href=https://github.com/triton-inference-server/python_backend/blob/3a60cfc7fb3525d1200ee179a1355fd813cccd28/README.md#usage><code>TritonPythonModel</code></a>.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#f92672>import</span> triton_python_backend_utils <span style=color:#66d9ef>as</span> pb_utils
+
+
+<span style=color:#66d9ef>class</span> <span style=color:#a6e22e>TritonPythonModel</span>:    
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>initialize</span>(self, args):
+        <span style=color:#e6db74>&#34;&#34;&#34;`initialize` is called only once when the model is being loaded.
+</span><span style=color:#e6db74>        Implementing `initialize` function is optional. This function allows
+</span><span style=color:#e6db74>        the model to initialize any state associated with this model.
+</span><span style=color:#e6db74>
+</span><span style=color:#e6db74>        Parameters
+</span><span style=color:#e6db74>        ----------
+</span><span style=color:#e6db74>        args : dict
+</span><span style=color:#e6db74>          Both keys and values are strings. The dictionary keys and values are:
+</span><span style=color:#e6db74>          * model_config: A JSON string containing the model configuration
+</span><span style=color:#e6db74>          * model_instance_kind: A string containing model instance kind
+</span><span style=color:#e6db74>          * model_instance_device_id: A string containing model instance device ID
+</span><span style=color:#e6db74>          * model_repository: Model repository path
+</span><span style=color:#e6db74>          * model_version: Model version
+</span><span style=color:#e6db74>          * model_name: Model name
+</span><span style=color:#e6db74>        &#34;&#34;&#34;</span>
+        print(<span style=color:#e6db74>&#39;Initialized...&#39;</span>)
+
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>execute</span>(self, requests: List[pb_utils<span style=color:#f92672>.</span>InferenceRequest]) <span style=color:#f92672>-&gt;</span> List[pb_utils<span style=color:#f92672>.</span>InferenceResponse]:
+        <span style=color:#e6db74>&#34;&#34;&#34;`execute` must be implemented in every Python model. `execute`
+</span><span style=color:#e6db74>        function receives a list of pb_utils.InferenceRequest as the only
+</span><span style=color:#e6db74>        argument. This function is called when an inference is requested
+</span><span style=color:#e6db74>        for this model.
+</span><span style=color:#e6db74>
+</span><span style=color:#e6db74>        Parameters
+</span><span style=color:#e6db74>        ----------
+</span><span style=color:#e6db74>        requests : list
+</span><span style=color:#e6db74>          A list of pb_utils.InferenceRequest
+</span><span style=color:#e6db74>
+</span><span style=color:#e6db74>        Returns
+</span><span style=color:#e6db74>        -------
+</span><span style=color:#e6db74>        list
+</span><span style=color:#e6db74>          A list of pb_utils.InferenceResponse. The length of this list must
+</span><span style=color:#e6db74>          be the same as `requests`
+</span><span style=color:#e6db74>        &#34;&#34;&#34;</span>
+
+        responses <span style=color:#f92672>=</span> []
+
+        <span style=color:#75715e># Every Python backend must iterate through list of requests and create</span>
+        <span style=color:#75715e># an instance of pb_utils.InferenceResponse class for each of them. You</span>
+        <span style=color:#75715e># should avoid storing any of the input Tensors in the class attributes</span>
+        <span style=color:#75715e># as they will be overridden in subsequent inference requests. You can</span>
+        <span style=color:#75715e># make a copy of the underlying NumPy array and store it if it is</span>
+        <span style=color:#75715e># required.</span>
+        <span style=color:#66d9ef>for</span> request <span style=color:#f92672>in</span> requests:
+            <span style=color:#75715e># Perform inference on the request and append it to responses list...</span>
+
+        <span style=color:#75715e># You must return a list of pb_utils.InferenceResponse. Length</span>
+        <span style=color:#75715e># of this list must match the length of `requests` list.</span>
+        <span style=color:#66d9ef>return</span> responses
+
+    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>finalize</span>(self):
+        <span style=color:#e6db74>&#34;&#34;&#34;`finalize` is called only once when the model is being unloaded.
+</span><span style=color:#e6db74>        Implementing `finalize` function is optional. This function allows
+</span><span style=color:#e6db74>        the model to perform any necessary clean ups before exit.
+</span><span style=color:#e6db74>        &#34;&#34;&#34;</span>
+        print(<span style=color:#e6db74>&#39;Cleaning up...&#39;</span>)
+</code></pre></div><p>The <code>TritonPythonModel</code> class can also implement <code>auto_complete_config</code> but we will skip this for our usecase and instead leave it up to the reader to check out the <a href=https://github.com/triton-inference-server/python_backend/blob/3a60cfc7fb3525d1200ee179a1355fd813cccd28/README.md#auto_complete_config>docs</a>.</p>
+<p>There are a couple of important things to consider when implementing the processing:</p>
+<ol>
+<li>
+<p>Execute - will handle the actual processing, should be able to handle a list of calls in order to support batching.</p>
+</li>
+<li>
+<p>Triton relies on <a href=https://developers.google.com/protocol-buffers>protobuf</a> as a serializing format, thus all the data passed in and out from models have to rely on the triton supplied protobuf formats to handle and create the request and response. Imported as:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#f92672>import</span> triton_python_backend_utils <span style=color:#66d9ef>as</span> pb_utils
+</code></pre></div><p>It also contains certain helper functions to get information from the model config(we will discuss the model config in depth later on). The <a href=https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#inputs-and-outputs>inputs and outputs</a> will be fetched and created as follows:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>
+in_0 <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>get_input_tensor_by_name(request, <span style=color:#e6db74>&#34;INPUT_0&#34;</span>)
+
+
+out_tensor_0 <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>Tensor(<span style=color:#e6db74>&#34;OUTPUT_0&#34;</span>,
+                                img_out<span style=color:#f92672>.</span>astype(output0_dtype))
+
+<span style=color:#75715e># Create InferenceResponse. You can set an error here in case</span>
+<span style=color:#75715e># there was a problem with handling this inference request.</span>
+<span style=color:#75715e># Below is an example of how you can set errors in inference</span>
+<span style=color:#75715e># response:</span>
+<span style=color:#75715e>#</span>
+<span style=color:#75715e># pb_utils.InferenceResponse(</span>
+<span style=color:#75715e>#    output_tensors=..., TritonError(&#34;An error occured&#34;))</span>
+inference_response <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>InferenceResponse(
+    output_tensors<span style=color:#f92672>=</span>[out_tensor_0])
+</code></pre></div><p>Check out the full code example [here] to walk through the code.</p>
+</li>
+<li>
+<p>In and outputs needs to be in matched to the model config</p>
+</li>
+</ol>
+<p>Lets examine the preprocessing a bit more in depth now when we understand the high level of how to set it up.</p>
+<p>The <code>TritonPythonModel</code> class includes the possibility to utalise the <code>__init__</code> method in order to initialise some variables. We will use this to pull the data types of the input and outputs from the model config.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>self<span style=color:#f92672>.</span>model_config <span style=color:#f92672>=</span> model_config <span style=color:#f92672>=</span> json<span style=color:#f92672>.</span>loads(args[<span style=color:#e6db74>&#39;model_config&#39;</span>])
+
+<span style=color:#75715e># Get OUTPUT0 configuration</span>
+output0_config <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>get_output_config_by_name(
+    model_config, <span style=color:#e6db74>&#34;OUTPUT_0&#34;</span>)
+
+<span style=color:#75715e># Convert Triton types to numpy types</span>
+self<span style=color:#f92672>.</span>output0_dtype <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>triton_string_to_numpy(
+    output0_config[<span style=color:#e6db74>&#39;data_type&#39;</span>])
+</code></pre></div><p>the name <code>OUTPUT_0</code> comes from the definition of the preprocessing in the <a href=/model_repository/ensemble/config.pbtxt>model config</a> where the name is set. In this case the init method is called when the model is loaded by triton and will be used for exposing the correct <a href=https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#datatypes>data types</a> for the output.</p>
+<p>The next interesting part is the <code>execute</code> function, the function will handle the preprocessing of each batch.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>execute</span>(self, requests: List[pb_utils<span style=color:#f92672>.</span>InferenceRequest]) <span style=color:#f92672>-&gt;</span> List[pb_utils<span style=color:#f92672>.</span>InferenceResponse]:
+
+        responses <span style=color:#f92672>=</span> []
+        <span style=color:#66d9ef>for</span> request <span style=color:#f92672>in</span> requests:
+            in_0 <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>get_input_tensor_by_name(request, <span style=color:#e6db74>&#34;INPUT_0&#34;</span>)
+
+            loader <span style=color:#f92672>=</span> transforms<span style=color:#f92672>.</span>Compose([
+                transforms<span style=color:#f92672>.</span>Resize([<span style=color:#ae81ff>224</span>, <span style=color:#ae81ff>224</span>]),
+                transforms<span style=color:#f92672>.</span>CenterCrop(<span style=color:#ae81ff>224</span>),
+                transforms<span style=color:#f92672>.</span>ToTensor(),
+                transforms<span style=color:#f92672>.</span>Normalize(mean<span style=color:#f92672>=</span>[<span style=color:#ae81ff>0.485</span>, <span style=color:#ae81ff>0.456</span>, <span style=color:#ae81ff>0.406</span>],
+                                             std<span style=color:#f92672>=</span>[<span style=color:#ae81ff>0.229</span>, <span style=color:#ae81ff>0.224</span>, <span style=color:#ae81ff>0.225</span>])
+            ])
+
+            <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>image_loader</span>(image_name):
+                image <span style=color:#f92672>=</span> loader(image_name)
+                <span style=color:#75715e>#expand the dimension to nchw</span>
+                image <span style=color:#f92672>=</span> image<span style=color:#f92672>.</span>unsqueeze(<span style=color:#ae81ff>0</span>)
+                <span style=color:#66d9ef>return</span> image
+
+            img <span style=color:#f92672>=</span> in_0<span style=color:#f92672>.</span>as_numpy()
+            image <span style=color:#f92672>=</span> Image<span style=color:#f92672>.</span>open(io<span style=color:#f92672>.</span>BytesIO(img<span style=color:#f92672>.</span>tobytes()))
+            img_out <span style=color:#f92672>=</span> image_loader(image)
+            img_out <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array(img_out)
+
+            out_tensor_0 <span style=color:#f92672>=</span> pb_utils<span style=color:#f92672>.</span>Tensor(<span style=color:#e6db74>&#34;OUTPUT_0&#34;</span>,
+                                           img_out<span style=color:#f92672>.</span>astype(self<span style=color:#f92672>.</span>output0_dtype))
+
+            responses<span style=color:#f92672>.</span>append( pb_utils<span style=color:#f92672>.</span>InferenceResponse(output_tensors<span style=color:#f92672>=</span>[out_tensor_0]))
+
+        <span style=color:#66d9ef>return</span> responses
+</code></pre></div><p>The execute function fetches the input values based upon there names and then initialize a normalization function. In this example we will use the <a href=https://pytorch.org/vision/stable/transforms.html>pytorch transform</a> functionality to preprocess the images. The most important parts to pay attention to in this example except for the input handling is the output handling where each of the inputs in the batch are processed and converted to a <code>InferenceResponse</code> which is then appended to a list. The response list must match the request list length.</p>
+<h2 id=postprocessing>Postprocessing</h2>
+<p>The Postprocessing works in the same way as the <a href=#preprocessing>Preprocessing</a> where we need to implement the <code>TritonPythonModel</code> class. In this case the post processing will be &ldquo;stupid simple&rdquo; where we just multiply the class label with 2.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>UPDATE HERE <span style=color:#f92672>...</span>
+</code></pre></div><h2 id=model-repository>Model repository</h2>
+<p>Each of the processing steps:</p>
+<ul>
+<li>Preprocessing (python)</li>
+<li>Inference (tensorrt_plan)</li>
+<li>Postprocessing (python)</li>
+</ul>
+<p>have to be described as separate models each with a <code>config.pbtxt</code> in a separate folder with the name of the step, in order to be able to combine it to an ensemble a model. Thus both the individual steps and the combined ensemble must be represented.</p>
+<p>The folder structure should look like below:</p>
+<pre tabindex=0><code>models
+|-- model_a
+    |-- 1
+    |   |-- model.py
+    |-- config.pbtxt
+</code></pre><p>Triton expects the models to be version within the model repository with an incremental integer. In this case we will assume that the models added have version <code>1</code> and thus add them in the sub folders accordingly.</p>
+<h2 id=setup>Setup</h2>
+<p><strong>1. Converting PyTorch Model to ONNX format:</strong></p>
+<p>Run onnx_exporter.py to convert ResNet50 PyTorch model to ONNX format. Width and height dims are fixed at 224 but dynamic axes arguments for dynamic batching are used. Commands from the 2. and 3. subsections shall be executed within this Docker container.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    docker run -it --gpus all --ipc<span style=color:#f92672>=</span>host --ulimit memlock<span style=color:#f92672>=</span>-1 --ulimit stack<span style=color:#f92672>=</span><span style=color:#ae81ff>67108864</span> -v <span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>:/workspace nvcr.io/nvidia/pytorch:22.06-py3 bash
+    pip install numpy pillow torchvision
+    python onnx_exporter.py --save model.onnx
+</code></pre></div><p><strong>2. Create the model repository:</strong></p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    mkdir -p model_repository/ensemble_python_resnet50/1
+    mkdir -p model_repository/preprocessing/1
+    mkdir -p model_repository/postprocessing/1
+    mkdir -p model_repository/resnet50_trt/1
+    
+    <span style=color:#75715e># Copy the Python model</span>
+    cp preprocessing.py model_repository/preprocessing/1/model.py
+    cp postprocessing.py model_repository/postprocessing/1/model.py
+    <span style=color:#75715e># Copy the restnet model</span>
+    cp model.onnx model_repository/resnet50_trt/1/model.onnx
+</code></pre></div><p><strong>3. Build a TensorRT engine for the ONNX model</strong></p>
+<p>Set the arguments for enabling fp16 precision &ndash;fp16. To enable dynamic shapes use &ndash;minShapes, &ndash;optShapes, and maxShapes with &ndash;explicitBatch:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    trtexec --onnx<span style=color:#f92672>=</span>model.onnx --saveEngine<span style=color:#f92672>=</span>./model_repository/resnet50_trt/1/model.plan --explicitBatch --minShapes<span style=color:#f92672>=</span>input:1x3x224x224 --optShapes<span style=color:#f92672>=</span>input:1x3x224x224 --maxShapes<span style=color:#f92672>=</span>input:256x3x224x224 --fp16
+</code></pre></div><p><strong>4. Run the command below to start the server container:</strong></p>
+<p>Under model_repository, run this command to start the server docker container:</p>
+<p>&ndash; Why do we do this again? Just to this onece with the ports and life would be easier &mldr;</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    docker run --runtime<span style=color:#f92672>=</span>nvidia -it --shm-size<span style=color:#f92672>=</span>1gb --rm -p8000:8000 -p8001:8001 -p8002:8002 -v<span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>:/workspace/ -v/<span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>/model_repository:/models nvcr.io/nvidia/tritonserver:22.06-py3 bash
+    pip install numpy pillow torchvision
+    tritonserver --model-repository<span style=color:#f92672>=</span>/models
+</code></pre></div><p><strong>5. Start the client to test:</strong></p>
+<p>Under python_backend/examples/resnet50_trt, run the commands below to start the client Docker container:</p>
+<pre tabindex=0><code>    wget https://raw.githubusercontent.com/triton-inference-server/server/main/qa/images/mug.jpg -O &quot;mug.jpg&quot;
+    docker run --rm --net=host -v $(pwd):/workspace/ nvcr.io/nvidia/tritonserver:22.06-py3-sdk python client.py --image mug.jpg   
+</code></pre><p>The result of classification is:COFFEE MUG</p>
+<p>Here, since we input an image of &ldquo;mug&rdquo; and the inference result is &ldquo;COFFEE MUG&rdquo; which is correct.</p>
+<p>If you want to play around with the postprocessing in order to convince yourself that it actually works you can change the postprocessing function to return a static value.</p>
+<pre tabindex=0><code>    def execute(self, requests):
+        responses = []
+        for request in requests:
+            in_0 = pb_utils.get_input_tensor_by_name(request, &quot;INPUT_0&quot;)
+            img = in_0.as_numpy()
+            out_tensor_0 = pb_utils.Tensor(&quot;OUTPUT_0&quot;, img.astype(self.output0_dtype))
+            inference_response = pb_utils.InferenceResponse(
+                output_tensors=[out_tensor_0])
+            responses.append(inference_response)
+
+        return responses
+</code></pre><p>which will return the class <code>TENCH</code> as expected, check the <a href=/model_repository/resnet50_trt/labels.txt>labels</a> where the first class is <code>TENCH</code>.</p>
+<h1 id=what-is-triton>What is triton?</h1>
+<pre tabindex=0><code>Triton Inference Server is an open source inference serving software that streamlines AI inferencing.
+</code></pre><p>according to <a href=https://github.com/triton-inference-server/server>nvidia</a>. The simple description is that it is a cross machine learning platform for model severs that supports some of the most popular libraries such as Tensorflow, Pytorch, Onnx and tensorRT.</p>
+<h2 id=plattform>Plattform</h2>
+<p>Triton supports serving multiple libraries and optimization of these, in order to allow Trition server to know which, the model platform always have to be specified in the <code>config.pbtxt</code> file. This allows Triton to understand how to server the model. More information about the <a href=https://github.com/triton-inference-server/server/blob/64ea6dcb7d042f8c450113e5cfa73a5cad4af1f0/docs/model_configuration.md>config.pbtxt</a>. The available platforms can be found <a href=https://github.com/triton-inference-server/backend/blob/main/README.md#where-can-i-find-all-the-backends-that-are-available-for-triton>here</a></p>
+<h2 id=what-is-the-python-backend>What is the python backend?</h2>
+<p>Triton includes a variety of tools, the python backend allows for combining python code with the Triton sever without having to interact with the c code (Triton is written in c) it self. Allowing for easier interactions with the triton sever without having to use GRPC or HTTP.</p>
+<h1 id=how-to-update-the-deployed-model>How to update the deployed model.</h1>
+<h3 id=how-to-check-what-is-deployed>How to check what is deployed</h3>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST  http://localhost:8000/v2/repository/models/index
+</code></pre></div><h3 id=heading></h3>
+<p>To deloy the models with explicit instead of poll(when we put in the whole folder).</p>
+<pre tabindex=0><code>tritonserver --model-repository=/models --model-control-mode=explicit
+</code></pre><p>This way no models are loaded, instead you need to use the API to specifically load these models of interest. This can be done:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST http://localhost:8000/v2/repository/models/ensemble_python_resnet50/load
+</code></pre></div><p>Once a model is loaded we can check the index again and see what is ready and not.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST http://localhost:8000/v2/repository/models/index
+<span style=color:#f92672>[{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;ensemble_python_resnet50&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;postprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;preprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;resnet50_trt&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}]</span>
+</code></pre></div><p>All models are ready. In order to unload one model we can do:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST http://localhost:8000/v2/repository/models/ensemble_python_resnet50/unload
+</code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST http://localhost:8000/v2/repository/models/index
+<span style=color:#f92672>[{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;ensemble_python_resnet50&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;UNAVAILABLE&#34;</span>,<span style=color:#e6db74>&#34;reason&#34;</span>:<span style=color:#e6db74>&#34;unloaded&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;postprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;preprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;resnet50_trt&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}]</span>
+</code></pre></div><h3 id=version-deployed>Version deployed</h3>
+<p>In order to achieve zero down time deployments we also need <a href=https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#version-policy>this</a>. It will make it possible to set the config to just upload the latest version.</p>
+<p>In order to load the &lsquo;n&rsquo; latest models for inference we will set the following in the model configurations(config.pbtxt files):</p>
+<pre tabindex=0><code>version_policy: { latest: { num_versions: 1}}
+</code></pre><p>After adding a new version on s3 (or your local storage) an new load has to be triggered to reload.</p>
+<p>Then the new models are ready to be served, this also seems to result in zero down time during serving, switching over to the latest model(if set by the client).</p>
+<p>After the index will look like this(based upon the example).</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>curl -g -6 -X POST http://localhost:8000/v2/repository/models/index
+<span style=color:#f92672>[{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;ensemble_python_resnet50&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;UNAVAILABLE&#34;</span>,<span style=color:#e6db74>&#34;reason&#34;</span>:<span style=color:#e6db74>&#34;unloaded&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;ensemble_python_resnet50&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;2&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;postprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;UNAVAILABLE&#34;</span>,<span style=color:#e6db74>&#34;reason&#34;</span>:<span style=color:#e6db74>&#34;unloaded&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;postprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;2&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;preprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;UNAVAILABLE&#34;</span>,<span style=color:#e6db74>&#34;reason&#34;</span>:<span style=color:#e6db74>&#34;unloaded&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;preprocessing&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;2&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;resnet50_trt&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;1&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;UNAVAILABLE&#34;</span>,<span style=color:#e6db74>&#34;reason&#34;</span>:<span style=color:#e6db74>&#34;unloaded&#34;</span><span style=color:#f92672>}</span>,<span style=color:#f92672>{</span><span style=color:#e6db74>&#34;name&#34;</span>:<span style=color:#e6db74>&#34;resnet50_trt&#34;</span>,<span style=color:#e6db74>&#34;version&#34;</span>:<span style=color:#e6db74>&#34;2&#34;</span>,<span style=color:#e6db74>&#34;state&#34;</span>:<span style=color:#e6db74>&#34;READY&#34;</span><span style=color:#f92672>}]</span>
+</code></pre></div><h3 id=access-from-s3>Access from s3</h3>
+<pre tabindex=0><code>export AWS_ACCESS_KEY_ID=''
+export AWS_SECERET_ACCESS_KEY=''
+export AWS_SESSION_TOKEN=''
+export AWS_DEFAULT_REGION=''
+</code></pre><p>I first missed the region and then got:</p>
+<pre tabindex=0><code>I0826 14:05:42.177942 996 server.cc:254] No server context available. Exiting immediately.
+error: creating server: Internal - Could not get MetaData for bucket with name niklas-test-ml-vision due to exception: , error message: No response body.
+</code></pre><p>To run Triton fetching the models from s3 run:</p>
+<pre tabindex=0><code>tritonserver --model-repository=s3://niklas-test-ml-vision/model_repository --model-control-mode=explicit
+</code></pre><p>A trick is that <code>s3</code> dont upload empty folders but, the ensemble needs to have a version folder as well. If it is not created it will not work. Example error below.</p>
+<pre tabindex=0><code>failed to load model 'ensemble_python_resnet50': at least one version must be available under the version policy of model 'ensemble_python_resnet50'
+</code></pre>
+</section>
+<div class=post-tags>
+</div>
+</article>
+</main>
+<footer>
+<div style=display:flex></div>
+<div class=footer-info>
+2023 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a>
+</div>
+</footer>
+</div>
+</body>
+</html>
