@@ -1,10 +1,9 @@
 baseURL = 'https://Njorda.github.io'
 languageCode = 'en-us'
 title = 'Njord tech blog'
-theme = 'hugo-theme-cleanwhite'
+theme = 'theme="archie'
 
 [params]
-  header_image = "/img/background_2022_07_17.png"
   SEOTitle = "Niklas Hansson, Johan Hansson | Njord Tech blog"
   description = "Data, distributed systems and software engineering"
   slogan = "One commit a day, keeps the slides away"
