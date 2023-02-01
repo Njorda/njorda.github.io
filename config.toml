@@ -1,7 +1,7 @@
 baseURL = 'https://Njorda.github.io'
 languageCode = 'en-us'
 title = 'Njord tech blog'
-theme = 'theme="archie'
+theme = 'archie'
 
 [params]
   SEOTitle = "Niklas Hansson, Johan Hansson | Njord Tech blog"
