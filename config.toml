@@ -3,13 +3,3 @@ languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'archie'
 
-[params]
-  SEOTitle = "Niklas Hansson, Johan Hansson | Njord Tech blog"
-  description = "Data, distributed systems and software engineering"
-  slogan = "One commit a day, keeps the slides away"
-
-  about_me = true
-
-  [[params.addtional_menus]]
-  title =  "ABOUT"
-  href =  "/about/"
