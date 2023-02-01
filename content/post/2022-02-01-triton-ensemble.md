@@ -1,3 +1,12 @@
+---
+layout:     post 
+title:      "Trition with post and pre processing"
+subtitle:   "Ensemble model"
+date:       2023-02-01
+author:     "Niklas Hansson"
+URL: "/2023/02/01/Trition_with_post_and_pre_processing/"
+---
+
 # Trition with post and pre processing. 
 
 This is based upon [this repo](https://github.com/Njorda/triton-ensemble)
