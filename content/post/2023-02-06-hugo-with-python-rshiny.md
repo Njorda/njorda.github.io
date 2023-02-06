@@ -1,3 +1,11 @@
+---
+layout:     post 
+title:      "Shinylive app with hugo"
+subtitle:   "hugo dynamic content"
+date:       2023-02-06
+author:     "Niklas Hansson"
+URL: "/2023/02/06/hugo-with-python-rshiny/"
+---
 # Shinylive app with hugo
 
 This blog post is based upon [RamiKrispin
