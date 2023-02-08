@@ -16,7 +16,7 @@ This blog post is based upon [RamiKrispin/shinylive](https://github.com/RamiKris
     style="height:800px;width:100%;"
 ></iframe>
 
-In order to add the a shiny app it needs to be deployed, in this case that is handled through github pages and lives within [https://github.com/NikeNano/shinylive](https://github.com/NikeNano/shinylive). The second step is to add the iframe
+In order to add the a shiny app it needs to be deployed, in this case that is handled through github pages and lives within [https://github.com/NikeNano/shinylive](https://github.com/NikeNano/shinylive). The second step is to add the iframe:
 
 ```html
 <iframe 
@@ -24,3 +24,10 @@ In order to add the a shiny app it needs to be deployed, in this case that is ha
     style="height:800px;width:100%;"
 ></iframe>
 ```
+
+How to integrat duckdb
+
+<iframe
+    src="https://shell.duckdb.org/"
+    style="height:800px;width:100%;"
+></iframe>
