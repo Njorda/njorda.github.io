@@ -25,9 +25,11 @@ In order to add the a shiny app it needs to be deployed, in this case that is ha
 ></iframe>
 ```
 
-How to integrat duckdb
+and the third and last is to update the config `config.toml` file with: 
 
-<iframe
-    src="https://shell.duckdb.org/"
-    style="height:800px;width:100%;"
-></iframe>
+```toml
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+```
