@@ -8,6 +8,8 @@ URL: "/2023/02/06/hugo-with-python-rshiny/"
 iframe: "https://nikenano.github.io/shinylive/"
 ---
 
+Current hack to just get the stuff working. 
+
 <iframe
     src="https://shell.duckdb.org/"
     style="height:800px;width:100%;"

@@ -1,3 +1,14 @@
+---
+layout:     post 
+title:      "Go compiler optimizations"
+subtitle:   "Profile-guided inlining optimization "
+date:       2023-02-08
+author:     "Niklas Hansson"
+URL: "/2023/02/06/hugo-with-python-rshiny/"
+iframe: "https://nikenano.github.io/shinylive/"
+---
+
+
 # Copilie optimisation using pprof
 
 This is based upon the new feature released in [go v1.20](https://tip.golang.org/doc/go1.20) where the compiler can optimize using a pprof file. 
