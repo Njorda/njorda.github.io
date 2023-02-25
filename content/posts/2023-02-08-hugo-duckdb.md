@@ -4,7 +4,7 @@ title:      "Duckdb with hugo"
 subtitle:   "Run duckdb using WebAssembly in the browser"
 date:       2023-02-08
 author:     "Niklas Hansson"
-URL: "/2023/02/06/hugo-with-python-rshiny/"
+URL: "/2023/02/06/hugo-duckdb/"
 iframe: "https://nikenano.github.io/shinylive/"
 ---
 
