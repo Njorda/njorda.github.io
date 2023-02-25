@@ -43,13 +43,110 @@ Shared memory In the triton examples(python) shared memory is often abbreviated 
 <p>The shared-memory extensions allow a client to communicate input and output tensors by system or CUDA shared memory. Using shared memory instead of sending the tensor data over the GRPC or REST interface can provide significant performance improvement for some use cases.<a href=https://github.com/triton-inference-server/server/blob/main/docs/protocol/extension_shared_memory.md>link</a></p>
 </blockquote>
 <p>Thus can be summarize as it allows us to send a reference to memory instead of the data around. A more in depth blog post for shared memory for cuda can be found <a href=https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/>here</a>.</p>
-<p>In this cas wel will us a single example that can be run locally and we will focus on system shared memory and not GPU shared memory but the logic will be the same.</p>
+<p>In this case we will us a single example that can be run locally and we will focus on system shared memory and not GPU shared memory but the logic will be the same.</p>
+<p>For this example we will build upon <a href=https://github.com/triton-inference-server/server/tree/main/docs/examples/model_repository/simple>one of the example models</a> available from triton in order to focus on the relevant parts and deep dive in to the client. It is important to be aware of that no changes are required on model side or the configurations in order to user shared memory. It is fully handled on the client side.</p>
+<pre tabindex=0><code class=language-config.pbtxt data-lang=config.pbtxt>name: &quot;shared_memory&quot;
+platform: &quot;tensorflow_graphdef&quot;
+max_batch_size: 8
+input [
+  {
+    name: &quot;INPUT0&quot;
+    data_type: TYPE_INT32
+    dims: [ 16 ]
+  },
+  {
+    name: &quot;INPUT1&quot;
+    data_type: TYPE_INT32
+    dims: [ 16 ]
+  }
+]
+output [
+  {
+    name: &quot;OUTPUT0&quot;
+    data_type: TYPE_INT32
+    dims: [ 16 ]
+  },
+  {
+    name: &quot;OUTPUT1&quot;
+    data_type: TYPE_INT32
+    dims: [ 16 ]
+  }
+]
+</code></pre><p>The model can be found <a href=https://github.com/triton-inference-server/server/blob/main/docs/examples/model_repository/simple/1/model.graphdef>here</a></p>
+<p>In this example we will run triton locally and the only requirement will be to have docker installed, we will not configure the model to use a GPU but this could easily be changed. In order to run the code the following folder structure is required:</p>
+<pre tabindex=0><code>.
+└── shared_memory
+    ├── 1
+    │   └── model.graphdef
+    └── config.pbtxt
+</code></pre><p>To start the model server you can run:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>docker run  -it --shm-size<span style=color:#f92672>=</span>3gb --rm -p8000:8000 -p8001:8001 -p8002:8002 -v<span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>:/workspace/ -v/<span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>:/models nvcr.io/nvidia/tritonserver:23.01-py3 bash
+</code></pre></div><p>followed by:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>tritonserver --model-repository<span style=color:#f92672>=</span>/models
+</code></pre></div><p>The next step is to write the code for the client. We will start of with a client implementation that don&rsquo;t use any shared memory and then update it. Also we will focuse on <a href=https://grpc.io/>grpc</a>.</p>
+<p>The client we start out looks as follows:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>main</span>():
+    <span style=color:#66d9ef>try</span>:
+        triton_client <span style=color:#f92672>=</span> tritongrpcclient<span style=color:#f92672>.</span>InferenceServerClient(
+            url<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;0.0.0.0:8001&#34;</span>, verbose<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>)
+    <span style=color:#66d9ef>except</span> <span style=color:#a6e22e>Exception</span> <span style=color:#66d9ef>as</span> e:
+        print(<span style=color:#e6db74>&#34;channel creation failed: &#34;</span> <span style=color:#f92672>+</span> str(e))
+        sys<span style=color:#f92672>.</span>exit(<span style=color:#ae81ff>1</span>) 
+
+    inputs <span style=color:#f92672>=</span> []
+    outputs <span style=color:#f92672>=</span> []
+
+    inputs<span style=color:#f92672>.</span>append(
+        tritongrpcclient<span style=color:#f92672>.</span>InferInput(<span style=color:#e6db74>&#34;INPUT0&#34;</span>, np<span style=color:#f92672>.</span>asarray([<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>16</span>], dtype<span style=color:#f92672>=</span>np<span style=color:#f92672>.</span>int64), <span style=color:#e6db74>&#34;INT32&#34;</span>))
+    inputs<span style=color:#f92672>.</span>append(
+        tritongrpcclient<span style=color:#f92672>.</span>InferInput(<span style=color:#e6db74>&#34;INPUT1&#34;</span>, np<span style=color:#f92672>.</span>asarray([<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>16</span>], dtype<span style=color:#f92672>=</span>np<span style=color:#f92672>.</span>int64), <span style=color:#e6db74>&#34;INT32&#34;</span>))
+    outputs<span style=color:#f92672>.</span>append(tritongrpcclient<span style=color:#f92672>.</span>InferRequestedOutput(<span style=color:#e6db74>&#34;OUTPUT0&#34;</span>))
+    outputs<span style=color:#f92672>.</span>append(tritongrpcclient<span style=color:#f92672>.</span>InferRequestedOutput(<span style=color:#e6db74>&#34;OUTPUT1&#34;</span>))
+
+
+    inputs[<span style=color:#ae81ff>0</span>]<span style=color:#f92672>.</span>set_data_from_numpy(np<span style=color:#f92672>.</span>expand_dims(np<span style=color:#f92672>.</span>asarray([i <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> range(<span style=color:#ae81ff>0</span>,<span style=color:#ae81ff>16</span>,<span style=color:#ae81ff>1</span>)], dtype<span style=color:#f92672>=</span>np<span style=color:#f92672>.</span>int32), axis<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>))
+    inputs[<span style=color:#ae81ff>1</span>]<span style=color:#f92672>.</span>set_data_from_numpy(np<span style=color:#f92672>.</span>expand_dims(np<span style=color:#f92672>.</span>asarray([i <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> range(<span style=color:#ae81ff>0</span>,<span style=color:#ae81ff>16</span>,<span style=color:#ae81ff>1</span>)], dtype<span style=color:#f92672>=</span>np<span style=color:#f92672>.</span>int32), axis<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>))
+    results <span style=color:#f92672>=</span> triton_client<span style=color:#f92672>.</span>infer(model_name<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;shared_memory&#34;</span>,
+                                  inputs<span style=color:#f92672>=</span>inputs,
+                                  outputs<span style=color:#f92672>=</span>outputs)
+
+    output_0_data <span style=color:#f92672>=</span> results<span style=color:#f92672>.</span>as_numpy(<span style=color:#e6db74>&#34;OUTPUT0&#34;</span>)
+    output_1_data <span style=color:#f92672>=</span> results<span style=color:#f92672>.</span>as_numpy(<span style=color:#e6db74>&#34;OUTPUT1&#34;</span>)
+    print(output_0_data, output_1_data)
+</code></pre></div><p>For an official example you can check <a href=https://github.com/triton-inference-server/client/blob/main/src/python/examples/simple_grpc_shm_client.py>here</a> but we will try to go more in depth what is happening on the way.</p>
+<p>The first thing we will have to add to our client implementation is:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>    triton_client<span style=color:#f92672>.</span>unregister_system_shared_memory()
+    triton_client<span style=color:#f92672>.</span>unregister_cuda_shared_memory()
+</code></pre></div><p>this is only needed in order to make sure we have no memory regions are register with the server. I have not found if this is actually for the specific client or not but hope so, will do further test on this and update later. The next step is to register the memory for the inputs and outputs that will be shared between triton and the client. This is slightly different between GPU and CPU, in this case we will focuse on the CPU, system memory. First step is to create a memory region:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>shm_ip_handle <span style=color:#f92672>=</span> shm<span style=color:#f92672>.</span>create_shared_memory_region(<span style=color:#e6db74>&#34;input_data&#34;</span>,
+                                                <span style=color:#e6db74>&#34;/input_simple&#34;</span>,
+                                                input_byte_size <span style=color:#f92672>*</span> <span style=color:#ae81ff>2</span>)
+</code></pre></div><p>The first input to the function represent the name, the second the key to the underlying memory region and the third is the memory byte size. The byte size can be calculated based upon the input and the input data type size(int64 vs int32 and so on), in this case it is equal to: <code>16 * 4 *2</code> (16 variables of type 32 int, 4 bytes and we have 2 inputs).The name <code>shm_ip_handle</code> comes from <code>share memory input handler</code> and we will have to make one for the input and output separately. When we have the region we will set the data in the regions as follows</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#75715e># Put input data values into shared memory</span>
+input0_data <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>expand_dims(np<span style=color:#f92672>.</span>asarray([i <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> range(<span style=color:#ae81ff>0</span>,<span style=color:#ae81ff>16</span>,<span style=color:#ae81ff>1</span>)]
+input1_data <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>expand_dims(np<span style=color:#f92672>.</span>asarray([i <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> range(<span style=color:#ae81ff>0</span>,<span style=color:#ae81ff>16</span>,<span style=color:#ae81ff>1</span>)]
+shm<span style=color:#f92672>.</span>set_shared_memory_region(shm_ip_handle, [input0_data])
+shm<span style=color:#f92672>.</span>set_shared_memory_region(shm_ip_handle, [input1_data],offset<span style=color:#f92672>=</span><span style=color:#ae81ff>16</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>4</span>)
+</code></pre></div><p>the offset for the input1_data is in order to add the bytes sequentially after the first input. The last step in order to have the shared memory set up is:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>triton_client<span style=color:#f92672>.</span>register_system_shared_memory(<span style=color:#e6db74>&#34;input_data&#34;</span>, <span style=color:#e6db74>&#34;/input_simple&#34;</span>,
+                                            <span style=color:#ae81ff>16</span><span style=color:#f92672>*</span> <span style=color:#ae81ff>4</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>2</span>)
+</code></pre></div><p>which will register the memory with the triton server. The same has to be done with the output data and then in the end to get the output we do:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>output0_data <span style=color:#f92672>=</span> shm<span style=color:#f92672>.</span>get_contents_as_numpy(
+    shm_op_handle, utils<span style=color:#f92672>.</span>triton_to_np_dtype(output0<span style=color:#f92672>.</span>datatype),
+    output0<span style=color:#f92672>.</span>shape)
+</code></pre></div><p>where we fetch the data from the the shared memory. Finally in order to clean up:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>triton_client<span style=color:#f92672>.</span>get_system_shared_memory_status()
+triton_client<span style=color:#f92672>.</span>unregister_system_shared_memory()
+shm<span style=color:#f92672>.</span>destroy_shared_memory_region(shm_ip_handle)
+shm<span style=color:#f92672>.</span>destroy_shared_memory_region(shm_op_handle)
+</code></pre></div><p>Where we fist unregister the memory with the triton server and then destroy it.</p>
 <h2 id=analyze-performance-using-pref_analyzerhttpsgithubcomtriton-inference-serverclientblobmainsrccperf_analyzerreadmemdshared-memory>Analyze performance using <a href=https://github.com/triton-inference-server/client/blob/main/src/c++/perf_analyzer/README.md#shared-memory>pref_analyzer</a></h2>
 <p>In order to see if this is actually worth doing <a href=https://github.com/triton-inference-server/client/blob/main/src/c++/perf_analyzer/README.md#shared-memory>pref_analyzer</a>(tool to analyze performance for triton) can be used.</p>
 <p>If you have issue setting it up check <a href=https://github.com/triton-inference-server/server/issues/4479>this github issue</a>.</p>
 <p>To start the docker container(since we dont like to install things and it is 2023 and docker is making life easier):</p>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>docker run -it --network host --shm-size<span style=color:#f92672>=</span>10gb --ipc host --ulimit memlock<span style=color:#f92672>=</span>-1 -v <span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>:/workspace/src nvcr.io/nvidia/tritonserver:23.01-py3-sdk /bin/bash
-</code></pre></div><p>Command to run:</p>
+</code></pre></div><p>remember that the server also needs to be run with <code>--ipc host</code> to work.</p>
+<p>Command to run:</p>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>perf_analyzer -m YOU_MODEL_NAME_HERE -u localhost:8001 -i gRPC --input-data YOUR_INPUT_DATA.json input.json
 </code></pre></div><h1 id=pinned-memory>Pinned memory</h1>
 <p><a href=https://developer.nvidia.com/blog/how-optimize-data-transfers-cuda-cc/>Nvidia blog post</a> about pinned memory and why it matters.</p>
