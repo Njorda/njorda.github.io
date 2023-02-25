@@ -4,7 +4,7 @@ title:      "Go compiler optimizations"
 subtitle:   "Profile-guided inlining optimization "
 date:       2023-02-08
 author:     "Niklas Hansson"
-URL: "/2023/02/06/hugo-with-python-rshiny/"
+URL: "/2023/02/08/Profile-guided_inlining_optimization/"
 iframe: "https://nikenano.github.io/shinylive/"
 ---
 
