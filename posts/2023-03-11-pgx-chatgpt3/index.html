@@ -1,0 +1,139 @@
+<!doctype html><html><head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge"><title> - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="&mdash; layout: post title: &ldquo;Postgress extention using ChatGPT3&rdquo; subtitle: &ldquo;Create feature embeddings inside postgres&rdquo; date: 2023-03-11 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/11/postgress_extention using_chatgpt3/&rdquo; pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
+TLDR: repo
+Setup First step is to set up pgx:
+$ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:">
+<meta property="og:image" content>
+<meta property="og:title" content>
+<meta property="og:description" content="&mdash; layout: post title: &ldquo;Postgress extention using ChatGPT3&rdquo; subtitle: &ldquo;Create feature embeddings inside postgres&rdquo; date: 2023-03-11 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/11/postgress_extention using_chatgpt3/&rdquo; pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
+TLDR: repo
+Setup First step is to set up pgx:
+$ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://Njorda.github.io/posts/2023-03-11-pgx-chatgpt3/"><meta property="article:section" content="posts">
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content>
+<meta name=twitter:description content="&mdash; layout: post title: &ldquo;Postgress extention using ChatGPT3&rdquo; subtitle: &ldquo;Create feature embeddings inside postgres&rdquo; date: 2023-03-11 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/11/postgress_extention using_chatgpt3/&rdquo; pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
+TLDR: repo
+Setup First step is to set up pgx:
+$ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:">
+<link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
+<link rel=stylesheet type=text/css media=screen href=https://Njorda.github.io/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css>
+</head>
+<body>
+<div class=content><header>
+<div class=main>
+<a href=https://Njorda.github.io>Njord tech blog</a>
+</div>
+<nav>
+<a href=/>Home</a>
+<a href=/posts>All posts</a>
+<a href=/about>About</a>
+</nav>
+</header>
+<main>
+<article>
+<div class=title>
+<h1 class=title></h1>
+<div class=meta>Posted on Jan 1, 0001</div>
+</div>
+<section class=body>
+<h1 id=--->&mdash;</h1>
+<h2 id=url-20230311postgress_extention-using_chatgpt3>layout: post
+title: &ldquo;Postgress extention using ChatGPT3&rdquo;
+subtitle: &ldquo;Create feature embeddings inside postgres&rdquo;
+date: 2023-03-11
+author: &ldquo;Niklas Hansson&rdquo;
+URL: &ldquo;/2023/03/11/postgress_extention using_chatgpt3/&rdquo;</h2>
+<h1 id=pgx-rust-postgres-extension>pgx rust Postgres extension</h1>
+<p>This blog post will dive into building <a href=https://www.postgresql.org/docs/current/sql-createextension.html>postgres extensions</a> using <a href=https://www.postgresql.org/docs/current/sql-createextension.html>pgx</a> in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.</p>
+<p>TLDR: <a href=https://github.com/NikeNano/PostChat>repo</a></p>
+<h1 id=setup>Setup</h1>
+<p>First step is to set up <code>pgx</code>:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ cargo install --locked cargo-pgx
+$ cargo pgx init
+</code></pre></div><p>We will then create a new create using:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ cargo pgx new my_extension
+$ cd my_extension
+</code></pre></div><p>Which should give you something like:</p>
+<pre tabindex=0><code>.
+├── Cargo.toml
+├── postchat.control
+├── sql
+└── src
+    └── lib.rs
+</code></pre><p>to make sure everything is set up correct run:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ cargo pgx run
+</code></pre></div><p>This will give you a <code>psql</code> shell, first step is to load your extensions:</p>
+<pre tabindex=0><code>$ postchat=# CREATE EXTENSION postchat;
+</code></pre><p>if the extension already exsist first drop it <code>DROP EXTENSION postchat;</code></p>
+<p>Useful command is also <code>\df</code> to show all functions.</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-SQL data-lang=SQL><span style=color:#66d9ef>SELECT</span> <span style=color:#f92672>*</span> <span style=color:#66d9ef>FROM</span> hello_postchat();
+</code></pre></div><h2 id=chatgpt3>ChatGPT3</h2>
+<p>Ok, so the dummy test works. Next step is to make a client call to ChatGpt3 using rust, in this case we will use the <a href=https://github.com/deontologician/openai-api-rust/>openai-api</a> crate. A simple example to invoke the API is:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>use</span> openai_api::Client;
+
+<span style=color:#75715e>#[tokio::main]</span>
+<span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>main</span>() {
+
+    <span style=color:#66d9ef>let</span> api_token <span style=color:#f92672>=</span> std::env::var(<span style=color:#e6db74>&#34;OPENAI_SK&#34;</span>).unwrap();
+    <span style=color:#66d9ef>let</span> client <span style=color:#f92672>=</span> Client::new(<span style=color:#f92672>&amp;</span>api_token);
+    <span style=color:#66d9ef>let</span> prompt <span style=color:#f92672>=</span> String::from(<span style=color:#e6db74>&#34;Once upon a time,&#34;</span>);
+    println!(
+        <span style=color:#e6db74>&#34;{}{}&#34;</span>,
+        prompt,
+        client.complete_prompt(prompt.as_str()).<span style=color:#66d9ef>await</span>.unwrap()
+    );
+}
+</code></pre></div><p>before a token to OPENAI needs to be set:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>$ export OPENAI_SK<span style=color:#f92672>=</span>YOUR_TOKEN
+</code></pre></div><p>to run use: <code>cargo run</code> which gives:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>cargo run
+    Finished dev <span style=color:#f92672>[</span>unoptimized + debuginfo<span style=color:#f92672>]</span> target<span style=color:#f92672>(</span>s<span style=color:#f92672>)</span> in 0.31s
+     Running <span style=color:#e6db74>`</span>target/debug/postchat<span style=color:#e6db74>`</span>
+Once upon a time, the belief in chaos and entropy was dominant, a belief credited to the first French
+</code></pre></div><p>how ever the input will differ between runs. Now when we know how to call rust we need to get it inside a pgx rust extension. This primarly builds around calling <code>async</code> code from a none <code>async</code> function and boils down to:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-rust data-lang=rust><span style=color:#66d9ef>async</span> <span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>prompt</span>(input: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; String {
+    <span style=color:#66d9ef>let</span> api_token <span style=color:#f92672>=</span> std::env::var(<span style=color:#e6db74>&#34;OPENAI_SK&#34;</span>).unwrap();
+    <span style=color:#66d9ef>let</span> client <span style=color:#f92672>=</span> Client::new(<span style=color:#f92672>&amp;</span>api_token);
+    <span style=color:#66d9ef>let</span> prompt <span style=color:#f92672>=</span> String::from(input);
+    <span style=color:#66d9ef>let</span> res <span style=color:#f92672>=</span> client.complete_prompt(prompt.as_str()).<span style=color:#66d9ef>await</span>.unwrap();
+    <span style=color:#66d9ef>return</span> res.to_string()
+}
+
+<span style=color:#75715e>#[pg_extern]</span>
+<span style=color:#66d9ef>fn</span> <span style=color:#a6e22e>chaty</span>(input: <span style=color:#66d9ef>&amp;</span><span style=color:#66d9ef>str</span>) -&gt; String {
+    <span style=color:#75715e>// Create the runtime
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>let</span> <span style=color:#66d9ef>mut</span> rt <span style=color:#f92672>=</span> Runtime::new().unwrap();
+    <span style=color:#75715e>// Spawn a future onto the runtime
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>return</span> rt.block_on(prompt(input)); 
+}
+</code></pre></div><p>Lets create a table to try it out and add some data to it:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-SQL data-lang=SQL><span style=color:#66d9ef>CREATE</span> <span style=color:#66d9ef>TABLE</span> testy(
+    id serial <span style=color:#66d9ef>PRIMARY</span> <span style=color:#66d9ef>KEY</span>,
+    chat TEXT
+);
+</code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-SQL data-lang=SQL><span style=color:#66d9ef>INSERT</span> <span style=color:#66d9ef>INTO</span> testy (chat)
+<span style=color:#66d9ef>VALUES</span>
+    (<span style=color:#e6db74>&#39;Hello&#39;</span>),
+    (<span style=color:#e6db74>&#39;tell me something cool&#39;</span>),
+    (<span style=color:#e6db74>&#39;why is that cool&#39;</span>);
+</code></pre></div><p>now we can run some chatgpt from Postgres</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-SQL data-lang=SQL><span style=color:#66d9ef>SELECT</span> chaty(chat) <span style=color:#66d9ef>FROM</span> testy;
+</code></pre></div><p>This is a dummy example and will not scale due to multiple reasons out of which one is that that we create a new client for each entry in the table, but is still a fun hack :).</p>
+</section>
+<div class=post-tags>
+</div>
+</article>
+</main>
+<footer>
+<div style=display:flex></div>
+<div class=footer-info>
+2023 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a>
+</div>
+</footer>
+</div>
+</body>
+</html>
