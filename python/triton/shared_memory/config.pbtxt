@@ -8,7 +8,7 @@ input [
     dims: [ 16 ]
   },
   {
-    name: "INPUT1"
+    name: "INPUT0"
     data_type: TYPE_INT32
     dims: [ 16 ]
   }
