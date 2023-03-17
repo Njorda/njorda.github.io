@@ -31,6 +31,27 @@
 <main class=list>
 <div class=site-description></div>
 <section class=list-item>
+<h1 class=title><a href=/2023/03/11/postgress_extention_using_chatgpt3/>Postgress extention using ChatGPT3</a></h1>
+<time>Mar 11, 2023</time>
+<br><div class=description>
+pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
+TLDR: repo
+Setup First step is to set up pgx:
+$ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:
+$ cargo pgx new my_extension $ cd my_extension Which should give you something like:&mldr;
+</div>
+<a class=readmore href=/2023/03/11/postgress_extention_using_chatgpt3/>Read more ⟶</a>
+</section>
+<section class=list-item>
+<h1 class=title><a href=/2023/03/01/go_memory_arena/>Go memory arena</a></h1>
+<time>Mar 1, 2023</time>
+<br><div class=description>
+As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
+The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely. The purpose of this functionality is to improve efficiency: manually freeing memory before a garbage collection delays that cycle.&mldr;
+</div>
+<a class=readmore href=/2023/03/01/go_memory_arena/>Read more ⟶</a>
+</section>
+<section class=list-item>
 <h1 class=title><a href=/2023/02/25/triton_shared_memory/>Triton shared memory and pinned memory</a></h1>
 <time>Feb 25, 2023</time>
 <br><div class=description>
@@ -104,26 +125,6 @@ Poor mans datalake layout: post title: &ldquo;Poor mans datalake&rdquo; subtitle
 Use Minio instead of S3 DBT instead of dagster. We will host it on Kubernetes and set it up so it all run locally.&mldr;
 </div>
 <a class=readmore href=/posts/2023-02-07-poor_mans_datalake/>Read more ⟶</a>
-</section>
-<section class=list-item>
-<h1 class=title><a href=/posts/2023-03-02-memory-arena/></a></h1>
-<time>Jan 1, 0001</time>
-<br><div class=description>
-&mdash; layout: post title: &ldquo;Go memory arena&rdquo; subtitle: &ldquo;Optimize the GC by not using it&rdquo; date: 2023-03-01 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/01/go_memory_arena/&rdquo; iframe: &ldquo;https://nikenano.github.io/shinylive/" As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
-The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely.&mldr;
-</div>
-<a class=readmore href=/posts/2023-03-02-memory-arena/>Read more ⟶</a>
-</section>
-<section class=list-item>
-<h1 class=title><a href=/posts/2023-03-11-pgx-chatgpt3/></a></h1>
-<time>Jan 1, 0001</time>
-<br><div class=description>
-&mdash; layout: post title: &ldquo;Postgress extention using ChatGPT3&rdquo; subtitle: &ldquo;Create feature embeddings inside postgres&rdquo; date: 2023-03-11 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/11/postgress_extention using_chatgpt3/&rdquo; pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
-TLDR: repo
-Setup First step is to set up pgx:
-$ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:&mldr;
-</div>
-<a class=readmore href=/posts/2023-03-11-pgx-chatgpt3/>Read more ⟶</a>
 </section>
 </main>
 <footer>

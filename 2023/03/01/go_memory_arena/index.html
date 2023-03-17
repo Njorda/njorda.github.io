@@ -1,18 +1,20 @@
 <!doctype html><html><head>
 <meta charset=utf-8>
-<meta http-equiv=x-ua-compatible content="IE=edge"><title> - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=description content="&mdash; layout: post title: &ldquo;Go memory arena&rdquo; subtitle: &ldquo;Optimize the GC by not using it&rdquo; date: 2023-03-01 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/01/go_memory_arena/&rdquo; iframe: &ldquo;https://nikenano.github.io/shinylive/&#34; As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
- The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely.">
+<meta http-equiv=x-ua-compatible content="IE=edge"><title>Go memory arena - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
+ The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely. The purpose of this functionality is to improve efficiency: manually freeing memory before a garbage collection delays that cycle.">
 <meta property="og:image" content>
-<meta property="og:title" content>
-<meta property="og:description" content="&mdash; layout: post title: &ldquo;Go memory arena&rdquo; subtitle: &ldquo;Optimize the GC by not using it&rdquo; date: 2023-03-01 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/01/go_memory_arena/&rdquo; iframe: &ldquo;https://nikenano.github.io/shinylive/&#34; As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
- The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely.">
+<meta property="og:title" content="Go memory arena">
+<meta property="og:description" content="As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
+ The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely. The purpose of this functionality is to improve efficiency: manually freeing memory before a garbage collection delays that cycle.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://Njorda.github.io/posts/2023-03-02-memory-arena/"><meta property="article:section" content="posts">
+<meta property="og:url" content="https://Njorda.github.io/2023/03/01/go_memory_arena/"><meta property="article:section" content="posts">
+<meta property="article:published_time" content="2023-03-01T00:00:00+00:00">
+<meta property="article:modified_time" content="2023-03-01T00:00:00+00:00">
 <meta name=twitter:card content="summary">
-<meta name=twitter:title content>
-<meta name=twitter:description content="&mdash; layout: post title: &ldquo;Go memory arena&rdquo; subtitle: &ldquo;Optimize the GC by not using it&rdquo; date: 2023-03-01 author: &ldquo;Niklas Hansson&rdquo; URL: &ldquo;/2023/03/01/go_memory_arena/&rdquo; iframe: &ldquo;https://nikenano.github.io/shinylive/&#34; As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
- The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely.">
+<meta name=twitter:title content="Go memory arena">
+<meta name=twitter:description content="As part of the go 1.20 release memory areas where introduced to the standard lib but not mentioned in the release notes but is still being discussed as of 2023-03-02 here. Memory arenas allow users to allocate memory and are described by the docs as:
+ The arena package provides the ability to allocate memory for a collection of Go values and free that space manually all at once, safely. The purpose of this functionality is to improve efficiency: manually freeing memory before a garbage collection delays that cycle.">
 <link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
 <link rel=stylesheet type=text/css media=screen href=https://Njorda.github.io/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css>
 </head>
@@ -30,18 +32,10 @@
 <main>
 <article>
 <div class=title>
-<h1 class=title></h1>
-<div class=meta>Posted on Jan 1, 0001</div>
+<h1 class=title>Go memory arena</h1>
+<div class=meta>Posted on Mar 1, 2023</div>
 </div>
 <section class=body>
-<h1 id=--->&mdash;</h1>
-<h2 id=iframe-httpsnikenanogithubioshinylive>layout: post
-title: &ldquo;Go memory arena&rdquo;
-subtitle: &ldquo;Optimize the GC by not using it&rdquo;
-date: 2023-03-01
-author: &ldquo;Niklas Hansson&rdquo;
-URL: &ldquo;/2023/03/01/go_memory_arena/&rdquo;
-iframe: &ldquo;<a href=https://nikenano.github.io/shinylive/%22>https://nikenano.github.io/shinylive/"</a></h2>
 <p>As part of the go 1.20 release <a href=https://go.dev/src/arena/arena.go>memory areas</a> where introduced to the standard lib but not mentioned in the <a href=https://go.dev/doc/go1.20>release notes</a> but is still being discussed as of 2023-03-02 <a href=https://github.com/golang/go/issues/51317>here</a>. Memory arenas allow users to allocate memory and are described by the docs as:</p>
 <blockquote>
 <p>The arena package provides the ability to allocate memory for a collection
