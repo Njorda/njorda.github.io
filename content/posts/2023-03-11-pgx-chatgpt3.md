@@ -1,10 +1,10 @@
-# ---
+---
 layout:     post 
 title:      "Postgress extention using ChatGPT3"
 subtitle:   "Create feature embeddings inside postgres"
 date:       2023-03-11
 author:     "Niklas Hansson"
-URL: "/2023/03/11/postgress_extention using_chatgpt3/"
+URL: "/2023/03/11/postgress_extention_using_chatgpt3/"
 ---
 
 

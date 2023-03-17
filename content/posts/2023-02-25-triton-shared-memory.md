@@ -5,7 +5,6 @@ subtitle:   "Optimize triton serving"
 date:       2023-02-25
 author:     "Niklas Hansson"
 URL: "/2023/02/25/triton_shared_memory/"
-iframe: "https://nikenano.github.io/shinylive/"
 ---
 
 

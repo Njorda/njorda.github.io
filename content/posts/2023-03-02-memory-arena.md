@@ -1,11 +1,10 @@
-# ---
+---
 layout:     post 
 title:      "Go memory arena"
 subtitle:   "Optimize the GC by not using it"
 date:       2023-03-01
 author:     "Niklas Hansson"
 URL: "/2023/03/01/go_memory_arena/"
-iframe: "https://nikenano.github.io/shinylive/"
 ---
 
 
