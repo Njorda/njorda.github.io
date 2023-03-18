@@ -34,7 +34,7 @@
 <h1 class=title><a href=/2023/03/11/postgress_extention_using_chatgpt3/>Postgress extention using ChatGPT3</a></h1>
 <time>Mar 11, 2023</time>
 <br><div class=description>
-pgx rust Postgres extension This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
+This blog post will dive into building postgres extensions using pgx in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres.
 TLDR: repo
 Setup First step is to set up pgx:
 $ cargo install --locked cargo-pgx $ cargo pgx init We will then create a new create using:
@@ -73,10 +73,11 @@ Current hack to just get the stuff working.
 <h1 class=title><a href=/2023/02/08/Profile-guided_inlining_optimization/>Go compiler optimizations</a></h1>
 <time>Feb 8, 2023</time>
 <br><div class=description>
-Copilie optimisation using pprof This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
+This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
 In order to run the pprof we will use flags:
 flag.Parse() if *cpuprofile != "" { f, err := os.Create(*cpuprofile) if err != nil { log.Fatal(err) } pprof.StartCPUProfile(f) defer pprof.StopCPUProfile() } more info can be found here.
-In order to run the profiling use the following command:&mldr;
+In order to run the profiling use the following command:
+go run main.go -cpuprofile=prof.&mldr;
 </div>
 <a class=readmore href=/2023/02/08/Profile-guided_inlining_optimization/>Read more ⟶</a>
 </section>

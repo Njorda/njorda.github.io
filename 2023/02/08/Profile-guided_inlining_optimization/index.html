@@ -1,26 +1,29 @@
 <!doctype html><html><head>
 <meta charset=utf-8>
 <meta http-equiv=x-ua-compatible content="IE=edge"><title>Go compiler optimizations - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
-<meta name=description content="Copilie optimisation using pprof This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
+<meta name=description content="This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
 In order to run the pprof we will use flags:
 flag.Parse() if *cpuprofile != &#34;&#34; { f, err := os.Create(*cpuprofile) if err != nil { log.Fatal(err) } pprof.StartCPUProfile(f) defer pprof.StopCPUProfile() } more info can be found here.
-In order to run the profiling use the following command:">
+In order to run the profiling use the following command:
+go run main.go -cpuprofile=prof.">
 <meta property="og:image" content>
 <meta property="og:title" content="Go compiler optimizations">
-<meta property="og:description" content="Copilie optimisation using pprof This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
+<meta property="og:description" content="This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
 In order to run the pprof we will use flags:
 flag.Parse() if *cpuprofile != &#34;&#34; { f, err := os.Create(*cpuprofile) if err != nil { log.Fatal(err) } pprof.StartCPUProfile(f) defer pprof.StopCPUProfile() } more info can be found here.
-In order to run the profiling use the following command:">
+In order to run the profiling use the following command:
+go run main.go -cpuprofile=prof.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://Njorda.github.io/2023/02/08/Profile-guided_inlining_optimization/"><meta property="article:section" content="posts">
 <meta property="article:published_time" content="2023-02-08T00:00:00+00:00">
 <meta property="article:modified_time" content="2023-02-08T00:00:00+00:00">
 <meta name=twitter:card content="summary">
 <meta name=twitter:title content="Go compiler optimizations">
-<meta name=twitter:description content="Copilie optimisation using pprof This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
+<meta name=twitter:description content="This is based upon the new feature released in go v1.20 where the compiler can optimize using a pprof file.
 In order to run the pprof we will use flags:
 flag.Parse() if *cpuprofile != &#34;&#34; { f, err := os.Create(*cpuprofile) if err != nil { log.Fatal(err) } pprof.StartCPUProfile(f) defer pprof.StopCPUProfile() } more info can be found here.
-In order to run the profiling use the following command:">
+In order to run the profiling use the following command:
+go run main.go -cpuprofile=prof.">
 <link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
 <link rel=stylesheet type=text/css media=screen href=https://Njorda.github.io/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css>
 </head>
@@ -42,7 +45,6 @@ In order to run the profiling use the following command:">
 <div class=meta>Posted on Feb 8, 2023</div>
 </div>
 <section class=body>
-<h1 id=copilie-optimisation-using-pprof>Copilie optimisation using pprof</h1>
 <p>This is based upon the new feature released in <a href=https://tip.golang.org/doc/go1.20>go v1.20</a> where the compiler can optimize using a pprof file.</p>
 <p>In order to run the pprof we will use flags:</p>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go>    <span style=color:#a6e22e>flag</span>.<span style=color:#a6e22e>Parse</span>()
