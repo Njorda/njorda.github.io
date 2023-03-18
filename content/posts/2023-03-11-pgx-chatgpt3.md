@@ -8,8 +8,6 @@ URL: "/2023/03/11/postgress_extention_using_chatgpt3/"
 ---
 
 
-# pgx rust Postgres extension
-
 This blog post will dive into building [postgres extensions](https://www.postgresql.org/docs/current/sql-createextension.html) using [pgx](https://www.postgresql.org/docs/current/sql-createextension.html) in rust. In order to do something existing we will ride the hype curve and integrate ChatGPT3 into postgres. 
 
 TLDR: [repo](https://github.com/NikeNano/PostChat)

@@ -9,8 +9,6 @@ iframe: "https://nikenano.github.io/shinylive/"
 ---
 
 
-# Copilie optimisation using pprof
-
 This is based upon the new feature released in [go v1.20](https://tip.golang.org/doc/go1.20) where the compiler can optimize using a pprof file. 
 
 In order to run the pprof we will use flags: 
