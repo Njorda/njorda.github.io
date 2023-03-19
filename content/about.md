@@ -7,5 +7,5 @@ Some open source project Niklas has contributed to:
 - [argo workflows](https://github.com/argoproj/argo-workflows)
 - [nvidia triton](https://github.com/triton-inference-server/server)
 
-## Niklas
-**_Johan_** is a Machine Learning engineer working on forecasting and life time value forecasting 🔎 .
+## Johan
+**_Johan_** is a Machine Learning engineer working on forecasting and life time value modeling 🔎 .
