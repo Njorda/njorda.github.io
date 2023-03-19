@@ -5,7 +5,7 @@ subtitle: "Streamline your development process and improve consistency with cont
 date:       2023-03-18
 author:     "Johan Hansson"
 URL: "/2023/03/18/dev-containers/"
-image:      "/img/background_2022_07_17.png"
+# image:      "/img/background_2022_07_17.png"
 ---
 
 # VS docker Dev Container
