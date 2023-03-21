@@ -1,71 +1,67 @@
 
 ---
-layout:     post 
-title: "Supercharge Your Development Workflow with VS Code Dev Containers"
-subtitle: "Streamline your development process and improve consistency with container-based development environments"
-date:       2023-03-18
-author:     "Johan Hansson"
-URL: "/2023/03/18/dev-containers/"
-image:      "/img/background_2022_07_17.png"
+layout: post 
+title: "Configuring Your Local Dev Container with GCP Default Credentials"
+subtitle: "A Step-by-Step Guide to Setting Up Your Development Environment for Seamless Integration with Google Cloud Platform"
+date: 2023-03-20
+author: "Johan Hansson"
+URL: "/2023/03/20/vs-code-dev-container-gcp-credentials/"
+image: "/img/background_2022_07_17.png"
 ---
 
+This blog post provides a step-by-step guide for setting up your VS Code dev container to work with Google Cloud Platform (GCP) services and APIs by configuring default GCP credentials. By authenticating your application with your GCP credentials, you can access the necessary resources without requiring additional authentication steps, saving time and streamlining your development workflow. 
+
+## Configuring Default GCP Credentials
+
+To use default credentials with GCP, you can follow the steps below:
+
+1. Run the following command to add default credentials:
+
+   ```bash
+   gcloud auth application-default login
+   ```
+
+2. To check the contents of the default credentials, run the following command:
+    ```bash
+    cat ~/.config/gcloud/application_default_credentials.json
+    ```
+This will display the contents of the JSON file containing the credentials.
 
 
-## Setting Up default gcp credentials
-
-[Read more gcp](https://cloud.google.com/docs/authentication/application-default-credentials#GAC)
+3. [Clone the base environment repository from the previous blog post.](https://github.com/Njorda/test_dev_containers).
 
 
-To add default crendtials run the following command
-```bash
-gcloud auth application-default login
-```
 
-To check what is in the default credentials run 
-
-```bash
-cat ~/.config/gcloud/application_default_credentials.json
-```
-
-In this example we will build on the previous blog post, where we created an base enviroment `2023-03-17-vs-code-dev-container`. 
-
-To copy the default crentials the local folder run the following command. 
+4. To copy the default credentials to the local folder, run the following command:
 ```bash 
 cp ~/.config/gcloud/application_default_credentials.json .devcontainer/application_default_credentials.json
 ```
-But before things get out of hand and we buy misstake pushes our credentials to git lets add a git ignore file that excludes .json files! 
 
+5. To prevent accidental commits of sensitive information to Git, add a .gitignore file that excludes JSON files.
 
-It is now possible to mount the default crednetials to the docker file and add the path to the env GOOGLE_APPLICATION_CREDENTIALS. Below is the update docker file. 
+6. In the Dockerfile, add the following code to mount the default credentials and set the GOOGLE_APPLICATION_CREDENTIALS environment variable:
 
+    ```bash 
+        FROM python:3.9-slim
 
-```bash 
-    FROM python:3.9-slim
+        COPY requirements.txt requirements.txt 
+        RUN pip install --upgrade pip
+        RUN pip install -r requirements.txt 
+        COPY application_default_credentials.json application_default_credentials.json
+        ENV GOOGLE_APPLICATION_CREDENTIALS=/application_default_credentials.json
+    ```
 
-    COPY requirements.txt requirements.txt 
-    RUN pip install --upgrade pip
-    RUN pip install -r requirements.txt 
-    COPY application_default_credentials.json application_default_credentials.json
-    ENV GOOGLE_APPLICATION_CREDENTIALS=/application_default_credentials.json
-```
+7. To test the setup, rebuild the Docker container and add the following Python script:
+    ```python 
+    from google.cloud.resourcemanager import ProjectsClient
 
-To test run it rebuild the docker container and add the following small python script 
+    for project in ProjectsClient().search_projects():
+        print(project.display_name)
 
+    ```
 
-```python 
-from google.cloud.resourcemanager import ProjectsClient
+This should display a list of your projects. If the API is not enabled, you will receive a warning, indicating that your keys are working correctly.
 
-for project in ProjectsClient().search_projects():
-    print(project.display_name)
-
-```
-
-You should now see a list of the projects you have, it might be that you haven't enabled this api but the you will get a warning and you keys are working as they should! 
-
-
-## Can we do it nicer without copying default credentials into our folder? 
-
-
-YES of course so let's lookinto how we update this! 
+While there are ways to improve this setup further, such as avoiding the need to copy the default credentials, this guide provides a simple way to configure your VS Code dev container to work with GCP services and APIs.
 
 
