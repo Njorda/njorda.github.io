@@ -1,0 +1,100 @@
+<!doctype html><html><head>
+<meta charset=utf-8>
+<meta http-equiv=x-ua-compatible content="IE=edge"><title>Configuring Your Local Dev Container with GCP Default Credentials - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=description content="This blog post provides a step-by-step guide for setting up your VS Code dev container to work with Google Cloud Platform (GCP) services and APIs by configuring default GCP credentials. By authenticating your application with your GCP credentials, you can access the necessary resources without requiring additional authentication steps, saving time and streamlining your development workflow.
+Configuring Default GCP Credentials To use default credentials with GCP, you can follow the steps below:">
+<meta property="og:image" content>
+<meta property="og:title" content="Configuring Your Local Dev Container with GCP Default Credentials">
+<meta property="og:description" content="This blog post provides a step-by-step guide for setting up your VS Code dev container to work with Google Cloud Platform (GCP) services and APIs by configuring default GCP credentials. By authenticating your application with your GCP credentials, you can access the necessary resources without requiring additional authentication steps, saving time and streamlining your development workflow.
+Configuring Default GCP Credentials To use default credentials with GCP, you can follow the steps below:">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://Njorda.github.io/2023/03/20/vs-code-dev-container-gcp-credentials/"><meta property="article:section" content="posts">
+<meta property="article:published_time" content="2023-03-20T00:00:00+00:00">
+<meta property="article:modified_time" content="2023-03-20T00:00:00+00:00">
+<meta name=twitter:card content="summary">
+<meta name=twitter:title content="Configuring Your Local Dev Container with GCP Default Credentials">
+<meta name=twitter:description content="This blog post provides a step-by-step guide for setting up your VS Code dev container to work with Google Cloud Platform (GCP) services and APIs by configuring default GCP credentials. By authenticating your application with your GCP credentials, you can access the necessary resources without requiring additional authentication steps, saving time and streamlining your development workflow.
+Configuring Default GCP Credentials To use default credentials with GCP, you can follow the steps below:">
+<link href=https://Njorda.github.io/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet>
+<link rel=stylesheet type=text/css media=screen href=https://Njorda.github.io/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css>
+</head>
+<body>
+<div class=content><header>
+<div class=main>
+<a href=https://Njorda.github.io>Njord tech blog</a>
+</div>
+<nav>
+<a href=/>Home</a>
+<a href=/posts>All posts</a>
+<a href=/about>About</a>
+</nav>
+</header>
+<main>
+<article>
+<div class=title>
+<h1 class=title>Configuring Your Local Dev Container with GCP Default Credentials</h1>
+<div class=meta>Posted on Mar 20, 2023</div>
+</div>
+<section class=body>
+<p>This blog post provides a step-by-step guide for setting up your VS Code dev container to work with Google Cloud Platform (GCP) services and APIs by configuring default GCP credentials. By authenticating your application with your GCP credentials, you can access the necessary resources without requiring additional authentication steps, saving time and streamlining your development workflow.</p>
+<h2 id=configuring-default-gcp-credentials>Configuring Default GCP Credentials</h2>
+<p>To use default credentials with GCP, you can follow the steps below:</p>
+<ol>
+<li>
+<p>Run the following command to add default credentials:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>gcloud auth application-default login
+</code></pre></div></li>
+<li>
+<p>To check the contents of the default credentials, run the following command:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>cat ~/.config/gcloud/application_default_credentials.json
+</code></pre></div></li>
+</ol>
+<p>This will display the contents of the JSON file containing the credentials.</p>
+<ol start=3>
+<li>
+<p><a href=https://github.com/Njorda/test_dev_containers>Clone the base environment repository from the previous blog post.</a>.</p>
+</li>
+<li>
+<p>To copy the default credentials to the local folder, run the following command:</p>
+</li>
+</ol>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>cp ~/.config/gcloud/application_default_credentials.json .devcontainer/application_default_credentials.json
+</code></pre></div><ol start=5>
+<li>
+<p>To prevent accidental commits of sensitive information to Git, add a .gitignore file that excludes JSON files.</p>
+</li>
+<li>
+<p>In the Dockerfile, add the following code to mount the default credentials and set the GOOGLE_APPLICATION_CREDENTIALS environment variable:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    FROM python:3.9-slim
+
+    COPY requirements.txt requirements.txt 
+    RUN pip install --upgrade pip
+    RUN pip install -r requirements.txt 
+    COPY application_default_credentials.json application_default_credentials.json
+    ENV GOOGLE_APPLICATION_CREDENTIALS<span style=color:#f92672>=</span>/application_default_credentials.json
+</code></pre></div></li>
+<li>
+<p>To test the setup, rebuild the Docker container and add the following Python script:</p>
+<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#f92672>from</span> google.cloud.resourcemanager <span style=color:#f92672>import</span> ProjectsClient
+
+<span style=color:#66d9ef>for</span> project <span style=color:#f92672>in</span> ProjectsClient()<span style=color:#f92672>.</span>search_projects():
+    print(project<span style=color:#f92672>.</span>display_name)
+
+</code></pre></div></li>
+</ol>
+<p>This should display a list of your projects. If the API is not enabled, you will receive a warning, indicating that your keys are working correctly.</p>
+<p>While there are ways to improve this setup further, such as avoiding the need to copy the default credentials, this guide provides a simple way to configure your VS Code dev container to work with GCP services and APIs.</p>
+</section>
+<div class=post-tags>
+</div>
+</article>
+</main>
+<footer>
+<div style=display:flex></div>
+<div class=footer-info>
+2023 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a>
+</div>
+</footer>
+</div>
+</body>
+</html>
