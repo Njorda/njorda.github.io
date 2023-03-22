@@ -2,7 +2,7 @@
 layout: post 
 title: "Running a kubeflow pipeline on google vertex"
 subtitle: "A Step-by-Step Guide to run your first kubeflow pipeline on google vertex"
-date: 2023-03-20
+date: 2023-03-21
 author: "Johan Hansson"
 URL: "/2023/03/21/kubeflow-pipelines"
 image: "/img/background_2022_07_17.png"
@@ -42,6 +42,8 @@ The code below can be found [here](https://github.com/Njorda/kubeflow-pipelines)
 2. Enable the following APIs; if you want to read more, you can find the information [here](https://cloud.google.com/vertex-ai/docs/pipelines/configure-project)
 - Compute Engine API
 - Vertex AI API ![Enable vertex](../images/enable_vertex.png)
+![image]({{< ref "enable_vertex.png" >}})
+
 - Cloud Storage
 
 3. Create a service account with vertex AI access; an ugly way that works is to create an account that has owner access.
