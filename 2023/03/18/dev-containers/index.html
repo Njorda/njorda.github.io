@@ -39,7 +39,7 @@ In this post, we&rsquo;ll dive into what dev containers are and how you can use 
 <h1 id=vs-docker-dev-container>VS docker Dev Container</h1>
 <p>Are you tired of dealing with messy, inconsistent development environments that slow down your workflow? Look no further than VS Code dev containers, a powerful feature in Visual Studio Code that can streamline your development process and improve consistency across different environments.</p>
 <p>In this post, we&rsquo;ll dive into what dev containers are and how you can use them to supercharge your development workflow. We&rsquo;ll also walk through how to set up a dev container for a Python environment and you will get an understsnding how easy it is to get started.</p>
-<p><img src=../images/dev_containers.png alt="Tierd of python enviroments not working"></p>
+<p><img src=/img/dev_containers.png alt="Tierd of python enviroments not working"></p>
 <h2 id=what-are-vs-code-dev-containers>What Are VS Code Dev Containers?</h2>
 <p>VS Code dev containers are a container-based approach to development environments that allow you to create lightweight, isolated environments with all the tools and dependencies you need to build and run your code. By using a container-based approach, dev containers are designed to be portable and reproducible, making it easier to share your development environment with others and ensure consistency across different environments.</p>
 <p>With dev containers, you can work with different programming languages and frameworks without having to install and configure them on your local machine. This means you can create a consistent and reproducible development environment, regardless of the host operating system.</p>
@@ -49,7 +49,7 @@ In this post, we&rsquo;ll dive into what dev containers are and how you can use 
 Open the command pallette with Command + Shift + P (or F1)
 Type Shell in command palette
 Select Shell Command: Install code in PATH from suggested list
-</code></pre><p><img src=../images/add_code_shell.png alt="add code to shell"></p>
+</code></pre><p><img src=/img/add_code_shell.png alt="add code to shell"></p>
 <p>There are a lot of pre-built containers, but here we are going to add a custom one that we can build on in later posts.</p>
 <p>Create a new empty folder from your terminal and open VS Code in that folder.</p>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>    mkdir test_dev_containers 
@@ -86,7 +86,7 @@ RUN pip install -r requirements.txt
 </code></pre></div><p>The file tells vs-code what the name of the dockerfile is, and we specify that we want vs code to instal eslint and forward port 3000. There are a lot of possabilites to customize here but for now this is enough.</p>
 <h2 id=running-a-python-script-in-the-dev-container>Running a python script in the dev container</h2>
 <p>If you push the green bar in the bottom left corner of vs code a popup will show up with the option to &ldquo;reopen in devcontainer&rdquo; push it and the container will build this will take any where from a few seconds to a couple of minutes depending on the size of your container.</p>
-<p><img src=../images/start_dev_container.png alt="Start dev container"></p>
+<p><img src=/img/start_dev_container.png alt="Start dev container"></p>
 <p>When it is done push open up a new terminal in vs code and run the comand below.</p>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>python test<span style=color:#f92672>.</span>py
 </code></pre></div><p>It should give you the folowwing result:</p>
