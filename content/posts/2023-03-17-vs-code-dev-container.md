@@ -13,7 +13,7 @@ Are you tired of dealing with messy, inconsistent development environments that 
 
 In this post, we'll dive into what dev containers are and how you can use them to supercharge your development workflow. We'll also walk through how to set up a dev container for a Python environment and you will get an understsnding how easy it is to get started.
 
-![Tierd of python enviroments not working](../images/dev_containers.png)
+![Tierd of python enviroments not working](/img/dev_containers.png)
 
 ## What Are VS Code Dev Containers?
 VS Code dev containers are a container-based approach to development environments that allow you to create lightweight, isolated environments with all the tools and dependencies you need to build and run your code. By using a container-based approach, dev containers are designed to be portable and reproducible, making it easier to share your development environment with others and ensure consistency across different environments.
@@ -31,7 +31,7 @@ Open the command pallette with Command + Shift + P (or F1)
 Type Shell in command palette
 Select Shell Command: Install code in PATH from suggested list
 ```
-![add code to shell](../images/add_code_shell.png)
+![add code to shell](/img/add_code_shell.png)
 
 There are a lot of pre-built containers, but here we are going to add a custom one that we can build on in later posts. 
 
@@ -99,7 +99,7 @@ The file tells vs-code what the name of the dockerfile is, and we specify that w
 
 If you push the green bar in the bottom left corner of vs code a popup will show up with the option to "reopen in devcontainer" push it and the container will build this will take any where from a few seconds to a couple of minutes depending on the size of your container. 
 
-![Start dev container](../images/start_dev_container.png)
+![Start dev container](/img/start_dev_container.png)
 
 When it is done push open up a new terminal in vs code and run the comand below.
 
