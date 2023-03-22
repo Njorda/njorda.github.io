@@ -42,7 +42,8 @@ The code below can be found [here](https://github.com/Njorda/kubeflow-pipelines)
 2. Enable the following APIs; if you want to read more, you can find the information [here](https://cloud.google.com/vertex-ai/docs/pipelines/configure-project)
 - Compute Engine API
 - Vertex AI API ![Enable vertex](../images/enable_vertex.png)
-![image]({{< ref "../images/enable_vertex.png" >}})
+{{< img src="../images/enable_vertex.png" alt="Enable vertex 2" >}}
+
 
 - Cloud Storage
 
