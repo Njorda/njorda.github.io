@@ -9,8 +9,8 @@ There are a lot of possibilities to run the pipelines, but in this series, we wi
 There are a lot of possibilities to run the pipelines, but in this series, we will use gcp vertex pipelines. Vertex will be the runner, but the pipelines will follow the kubeflow conventions meaning you can run them on whatever platform at hand or host kubeflow on your own Kubernetes cluster.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://Njorda.github.io/2023/03/21/kubeflow-pipelines/"><meta property="article:section" content="posts">
-<meta property="article:published_time" content="2023-03-20T00:00:00+00:00">
-<meta property="article:modified_time" content="2023-03-20T00:00:00+00:00">
+<meta property="article:published_time" content="2023-03-21T00:00:00+00:00">
+<meta property="article:modified_time" content="2023-03-21T00:00:00+00:00">
 <meta name=twitter:card content="summary">
 <meta name=twitter:title content="Running a kubeflow pipeline on google vertex">
 <meta name=twitter:description content="This blog post will go over how to build and run your very first kubeflow pipeline (kfp). In short, Kubeflow Pipelines is a platform for building and deploying portable, scalable machine learning (ML) workflows based on Docker containers.
@@ -33,7 +33,7 @@ There are a lot of possibilities to run the pipelines, but in this series, we wi
 <article>
 <div class=title>
 <h1 class=title>Running a kubeflow pipeline on google vertex</h1>
-<div class=meta>Posted on Mar 20, 2023</div>
+<div class=meta>Posted on Mar 21, 2023</div>
 </div>
 <section class=body>
 <p>This blog post will go over how to build and run your very first kubeflow pipeline (kfp). In short, <a href=https://www.kubeflow.org/docs/components/pipelines/v1/introduction/>Kubeflow Pipelines is a platform for building and deploying portable, scalable machine learning (ML) workflows based on Docker containers.</a></p>
@@ -62,9 +62,15 @@ There are a lot of possibilities to run the pipelines, but in this series, we wi
 </li>
 </ol>
 <ul>
-<li>Compute Engine API</li>
-<li>Vertex AI API <img src=../images/enable_vertex.png alt="Enable vertex"></li>
-<li>Cloud Storage</li>
+<li>
+<p>Compute Engine API</p>
+</li>
+<li>
+<p>Vertex AI API <img src=/enable_vertex.png alt="Enable vertex"></p>
+</li>
+<li>
+<p>Cloud Storage</p>
+</li>
 </ul>
 <ol start=3>
 <li>
