@@ -127,4 +127,4 @@ This code defines a simple pipeline using the Kubeflow Pipelines SDK. The pipeli
     )
 ```
 
-![You should now get an output with a link the the running pipeline if you follow it you should see somthing like this. ](/img/vertex_pipeline.png)
+You should now get an output with a link the the running pipeline if you follow it you should see somthing like this. ![vertex output](/img/vertex_pipeline.png)
