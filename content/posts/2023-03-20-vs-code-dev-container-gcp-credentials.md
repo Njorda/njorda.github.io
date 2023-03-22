@@ -1,4 +1,3 @@
-
 ---
 layout: post 
 title: "Configuring Your Local Dev Container with GCP Default Credentials"
