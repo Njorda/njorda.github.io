@@ -92,22 +92,27 @@ This should list all previous kfp pipelines, if your following this blog post it
     def ingetst_data() -> float:
         return 2.0
 
-
+    # Create components for the ingestion and training functions
     ingest_data_component = component(ingetst_data)
     train_component = component(train_model)
 
+
+    # Define the pipeline using the Kubeflow Pipelines SDK
     @dsl.pipeline(
         name="ltv-train",
     )
     def add_pipeline():
+        # Instantiate the ingest_data_component and store its output
         ingest_data = ingest_data_component()
-
-        train_model = train_component(ingest_data.output)
-
+        
+        # Instantiate the train_component, passing the output from the ingest_data_component
+        train_model = train_component(input=ingest_data.output)
+        
+        # Disable caching for the train_model component to ensure it runs every time
         train_model.set_caching_options(False)
 
-
-    compiler.Compiler().compile(pipeline_func=add_pipeline, package_path="local_run.json")
+    # Compile the pipeline to generate a JSON file for execution
+    compiler.Compiler().compile(pipeline_func=add_pipeline, package_path="local_run.yaml")
 ```
 This code defines a simple pipeline using the Kubeflow Pipelines SDK. The pipeline consists of two components: a data ingestion component (ingetst_data) and a model training component (train_model). The ingetst_data component returns a constant value of 2.0, while the train_model component adds 2.0 to the input value. Finally, the pipeline is compiled and saved as a JSON file (local_run.json) for local execution or deployment.
 
@@ -116,7 +121,7 @@ This code defines a simple pipeline using the Kubeflow Pipelines SDK. The pipeli
 ```python
     job = aip.PipelineJob(
         display_name="First kubeflow pipeline",
-        template_path="local_run.json",
+        template_path="local_run.yaml",
         pipeline_root=bucket,
         location="europe-west1",
         project=gcp_project,
