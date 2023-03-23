@@ -35,7 +35,7 @@ You might have to update even that with the command below, when writting this po
 The documentation from gcp can be found [here](https://cloud.google.com/vertex-ai/docs/pipelines/create-pipeline-template#vertex-ai-sdk-for-python_1)
 
 1. Enable artifact registry in gcp. 
-![artifact registry](../../static/img/enable_artifact_registry.png)
+![artifact registry](/img/enable_artifact_registry.png)
 
 2. create an artifact registry
 ![Enable vertex](/img/artifact_registry_kubeflow.png)
