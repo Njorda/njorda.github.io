@@ -23,7 +23,7 @@ First, you need to install `python:3.10`, which we use in this tutorial.
 Install the following packages and versions
 ```bash
     pandas==1.5.3
-    kfp==1.8.19
+    kfp==2.0.0b13
     ipykernel
     google-cloud-aiplatform==1.23.0
     python-dotenv==1.0.0
