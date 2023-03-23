@@ -118,29 +118,34 @@ all_piplines
     <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>ingetst_data</span>() <span style=color:#f92672>-&gt;</span> float:
         <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>2.0</span>
 
-
+    <span style=color:#75715e># Create components for the ingestion and training functions</span>
     ingest_data_component <span style=color:#f92672>=</span> component(ingetst_data)
     train_component <span style=color:#f92672>=</span> component(train_model)
 
+
+    <span style=color:#75715e># Define the pipeline using the Kubeflow Pipelines SDK</span>
     <span style=color:#a6e22e>@dsl</span><span style=color:#f92672>.</span>pipeline(
         name<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;ltv-train&#34;</span>,
     )
     <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>add_pipeline</span>():
+        <span style=color:#75715e># Instantiate the ingest_data_component and store its output</span>
         ingest_data <span style=color:#f92672>=</span> ingest_data_component()
-
-        train_model <span style=color:#f92672>=</span> train_component(ingest_data<span style=color:#f92672>.</span>output)
-
+        
+        <span style=color:#75715e># Instantiate the train_component, passing the output from the ingest_data_component</span>
+        train_model <span style=color:#f92672>=</span> train_component(input<span style=color:#f92672>=</span>ingest_data<span style=color:#f92672>.</span>output)
+        
+        <span style=color:#75715e># Disable caching for the train_model component to ensure it runs every time</span>
         train_model<span style=color:#f92672>.</span>set_caching_options(<span style=color:#66d9ef>False</span>)
 
-
-    compiler<span style=color:#f92672>.</span>Compiler()<span style=color:#f92672>.</span>compile(pipeline_func<span style=color:#f92672>=</span>add_pipeline, package_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;local_run.json&#34;</span>)
+    <span style=color:#75715e># Compile the pipeline to generate a JSON file for execution</span>
+    compiler<span style=color:#f92672>.</span>Compiler()<span style=color:#f92672>.</span>compile(pipeline_func<span style=color:#f92672>=</span>add_pipeline, package_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;local_run.yaml&#34;</span>)
 </code></pre></div><p>This code defines a simple pipeline using the Kubeflow Pipelines SDK. The pipeline consists of two components: a data ingestion component (ingetst_data) and a model training component (train_model). The ingetst_data component returns a constant value of 2.0, while the train_model component adds 2.0 to the input value. Finally, the pipeline is compiled and saved as a JSON file (local_run.json) for local execution or deployment.</p>
 <ol start=7>
 <li>To execute the pipeline on vertex you run the following code</li>
 </ol>
 <div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python>    job <span style=color:#f92672>=</span> aip<span style=color:#f92672>.</span>PipelineJob(
         display_name<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;First kubeflow pipeline&#34;</span>,
-        template_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;local_run.json&#34;</span>,
+        template_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;local_run.yaml&#34;</span>,
         pipeline_root<span style=color:#f92672>=</span>bucket,
         location<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;europe-west1&#34;</span>,
         project<span style=color:#f92672>=</span>gcp_project,
