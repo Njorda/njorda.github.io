@@ -2,6 +2,7 @@ baseURL = 'https://njorda.github.io/'
 languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'archie'
+relativeURLs = true
 
 [[menu.main]]
 name = "Home"
