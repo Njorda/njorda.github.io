@@ -1,4 +1,4 @@
-baseURL = 'https://Njorda.github.io'
+baseURL = 'www.njordy.com'
 languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'archie'
