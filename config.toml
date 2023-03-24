@@ -4,11 +4,6 @@ title = 'Njord tech blog'
 theme = 'archie'
 relativeURLs = true
 
-[sitemap]
-  changefreq = "weekly"
-  filename = "sitemap.xml"
-  priority = 0.5
-
 [[menu.main]]
 name = "Home"
 url = "/"
