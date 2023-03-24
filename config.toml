@@ -1,7 +1,8 @@
-baseURL = 'https://Njorda.github.io'
+baseURL = 'https://www.njordy.com/'
 languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'archie'
+relativeURLs = true
 
 [sitemap]
   changefreq = "weekly"
