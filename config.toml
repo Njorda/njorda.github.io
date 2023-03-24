@@ -3,6 +3,11 @@ languageCode = 'en-us'
 title = 'Njord tech blog'
 theme = 'archie'
 
+[sitemap]
+  changefreq = "weekly"
+  filename = "sitemap.xml"
+  priority = 0.5
+
 [[menu.main]]
 name = "Home"
 url = "/"
