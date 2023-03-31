@@ -28,7 +28,7 @@ the CPU cost of the garbage collector is incurred less frequently.
 
 In short it allows for allocating a chunk of memory and then utalise that chunk to store objects. The chunk will not be garbage collected but needs to be freed by the user. Referencing variables that lives in the memory arena after the arena has been freed will result in a panic, and thus care needs to be handled by the users. This also seems to be one of the[major concern](https://github.com/golang/go/issues/51317) from the go community about this feature. 
 
-There is also a short blog post [Go memory arena]({{< ref "/post/2023-03-02-memory-arena" >}}) specifically about memory arenas. 
+There is also a short blog post [Go memory arena]({{< ref "/posts/2023-03-02-memory-arena.md" >}}) specifically about memory arenas. 
 
 # Update apache arrow. 
 
