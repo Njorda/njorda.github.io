@@ -1,8 +1,11 @@
 module github.com/njorda.github.io/webassembly
 
-go 1.19
+go 1.20
 
-require github.com/apache/arrow/go/v10 v10.0.1
+require (
+	github.com/apache/arrow/go/v10 v10.0.1
+	github.com/apache/arrow/go/v11 v11.0.0
+)
 
 require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
