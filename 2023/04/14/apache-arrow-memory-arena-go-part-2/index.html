@@ -1,0 +1,246 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Go memory arenas for apache arrow, Part 2 - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="This blog post will continue to try to dive down in to apache arrow and specifically the Go memory allocation for Apache arrow. This is a follow up to Go memory arenas for apache arrow, Part 1.
+First of all why do we want to manage memory manually instead of using the GC? One of arrows key features is it support to share memory with out copy between programs however for a GC collected language this will not work that great."><meta property="og:image" content><meta property="og:title" content="Go memory arenas for apache arrow, Part 2"><meta property="og:description" content="This blog post will continue to try to dive down in to apache arrow and specifically the Go memory allocation for Apache arrow. This is a follow up to Go memory arenas for apache arrow, Part 1.
+First of all why do we want to manage memory manually instead of using the GC? One of arrows key features is it support to share memory with out copy between programs however for a GC collected language this will not work that great."><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2023/04/14/apache-arrow-memory-arena-go-part-2/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2023-04-14T00:00:00+00:00"><meta property="article:modified_time" content="2023-04-14T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Go memory arenas for apache arrow, Part 2"><meta name=twitter:description content="This blog post will continue to try to dive down in to apache arrow and specifically the Go memory allocation for Apache arrow. This is a follow up to Go memory arenas for apache arrow, Part 1.
+First of all why do we want to manage memory manually instead of using the GC? One of arrows key features is it support to share memory with out copy between programs however for a GC collected language this will not work that great."><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>Go memory arenas for apache arrow, Part 2</h1><div class=meta>Posted on Apr 14, 2023</div></div><section class=body><p>This blog post will continue to try to dive down in to <a href=https://arrow.apache.org/>apache arrow</a> and specifically the <a href=https://github.com/apache/arrow/tree/main/go>Go memory</a> allocation for Apache arrow. This is a follow up to <a href=https://www.njordy.com/2023/03/23/apache-arrow-memory-arena-go/>Go memory arenas for apache arrow, Part 1</a>.</p><p>First of all why do we want to manage memory manually instead of using the GC? One of arrows key features is it support to share memory with out copy between programs however for a GC collected language this will not work that great. What happens if Go believes the memory is not used any longer(which is correct for the go part) but used by someone else outside of go. In these situations it would be beneficial to be able to control when the memory is released.</p><p>The implementation is:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#f92672>package</span> <span style=color:#a6e22e>memory</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> (
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;arena&#34;</span> <span style=color:#75715e>// requires export GOEXPERIMENT=arenas to be set
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#e6db74>&#34;sync&#34;</span>
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>GoArenaAllocator</span> <span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>mem</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>arena</span>.<span style=color:#a6e22e>Arena</span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// Keep track on all the allocations, when all use then we can call free.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// map with the allocations which we need, I think this would be awesome.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>addrs</span> <span style=color:#66d9ef>map</span>[<span style=color:#66d9ef>int</span>]<span style=color:#66d9ef>bool</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>sync</span>.<span style=color:#a6e22e>Mutex</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>NewGoArenaAllocator</span>() <span style=color:#f92672>*</span><span style=color:#a6e22e>GoArenaAllocator</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>GoArenaAllocator</span>{<span style=color:#a6e22e>arena</span>.<span style=color:#a6e22e>NewArena</span>(), <span style=color:#66d9ef>map</span>[<span style=color:#66d9ef>int</span>]<span style=color:#66d9ef>bool</span>{}, <span style=color:#a6e22e>sync</span>.<span style=color:#a6e22e>Mutex</span>{}}
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>a</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>GoArenaAllocator</span>) <span style=color:#a6e22e>Allocate</span>(<span style=color:#a6e22e>size</span> <span style=color:#66d9ef>int</span>) []<span style=color:#66d9ef>byte</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>buf</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>arena</span>.<span style=color:#a6e22e>MakeSlice</span>[<span style=color:#66d9ef>byte</span>](<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>mem</span>, <span style=color:#a6e22e>size</span><span style=color:#f92672>+</span><span style=color:#a6e22e>alignment</span>, <span style=color:#a6e22e>size</span><span style=color:#f92672>+</span><span style=color:#a6e22e>alignment</span>) <span style=color:#75715e>// padding for 64-byte alignment, I dont think this is needed in the arena since we make all 64 bit aligned
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>addr</span> <span style=color:#f92672>:=</span> int(<span style=color:#a6e22e>addressOf</span>(<span style=color:#a6e22e>buf</span>))
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// So data will be loaded based upon division with 64, here we check the address pointer.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// If the data is even division with 64 we can load it to the cache way more efficient and gain speed ups
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// What we do here is move ths buffer around so the address is has a start that is even with 64 so we can load it faster.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>//
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>next</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>roundUpToMultipleOf64</span>(<span style=color:#a6e22e>addr</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Lock</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Unlock</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>addr</span> <span style=color:#f92672>!=</span> <span style=color:#a6e22e>next</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>shift</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>next</span> <span style=color:#f92672>-</span> <span style=color:#a6e22e>addr</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>out</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>buf</span>[<span style=color:#a6e22e>shift</span> : <span style=color:#a6e22e>size</span><span style=color:#f92672>+</span><span style=color:#a6e22e>shift</span> : <span style=color:#a6e22e>size</span><span style=color:#f92672>+</span><span style=color:#a6e22e>shift</span>]
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>addr</span> <span style=color:#f92672>:=</span> int(<span style=color:#a6e22e>addressOf</span>(<span style=color:#a6e22e>out</span>))
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>addrs</span>[<span style=color:#a6e22e>addr</span>] = <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>out</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>addrs</span>[<span style=color:#a6e22e>addr</span>] = <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>buf</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>a</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>GoArenaAllocator</span>) <span style=color:#a6e22e>CheckSize</span>() <span style=color:#66d9ef>int</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> len(<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>addrs</span>)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>a</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>GoArenaAllocator</span>) <span style=color:#a6e22e>Reallocate</span>(<span style=color:#a6e22e>size</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>b</span> []<span style=color:#66d9ef>byte</span>) []<span style=color:#66d9ef>byte</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>size</span> <span style=color:#f92672>==</span> len(<span style=color:#a6e22e>b</span>) {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>b</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>newBuf</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Allocate</span>(<span style=color:#a6e22e>size</span>)
+</span></span><span style=display:flex><span>	copy(<span style=color:#a6e22e>newBuf</span>, <span style=color:#a6e22e>b</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>newBuf</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>a</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>GoArenaAllocator</span>) <span style=color:#a6e22e>Free</span>(<span style=color:#a6e22e>b</span> []<span style=color:#66d9ef>byte</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>addr</span> <span style=color:#f92672>:=</span> int(<span style=color:#a6e22e>addressOf</span>(<span style=color:#a6e22e>b</span>))
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Lock</span>()
+</span></span><span style=display:flex><span>	delete(<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>addrs</span>, <span style=color:#a6e22e>addr</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Unlock</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> len(<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>addrs</span>) &gt; <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>Free</span>()
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>var</span> <span style=color:#a6e22e>_</span> <span style=color:#a6e22e>Allocator</span> = <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>GoArenaAllocator</span>{}
+</span></span></code></pre></div><p>Memory arenas will only release all the memory in one go, but allow for allocating new memory to the same arena. Thus in order to make sure that we all memory can be released a map is used with where the pointer address is stored for book keeping. When a specific piece of memory is released this is removed from the map. When the last piece of memory is released in the arena the arena is deleted, an arena can not be reuased when it is deleted. However the <code>GoArenaAllocator</code> is thread safe to use(this is supported through a <code>sync.Mutex</code>.</p><h1 id=byte-alignment>Byte alignment</h1><p>In order for a CPU to work more effective with the memory if the data is aligned with the bits in the architecture of the CPU. Thus a 64 bit CPU will be more performant if the data is stored in 8 consecutive bytes and the first byte lis on a 8 byte boundary.</p><blockquote><p>A memory address a is said to be n-byte aligned when a is a multiple of n (where n is a power of 2). In this context, a byte is the smallest unit of memory access, i.e. each memory address specifies a different byte</p></blockquote><p>But why does this matter? Every fetch from memory will fetch a cache line usually 64 bits(not related to 64 bit processors). Thus if the data is aligned with this size in mind we will reduce spill over between cache lines and thus reduce the number of cache lines that needs to be fetched. Memory modifications are also effecting cache lines since it might result in that other CPUs have to fetch the same line again and. Accidentally placing unrelated data on the same cache line is known as &ldquo;false sharding&rdquo;</p><p>For the interested reader <a href=https://www.akkadia.org/drepper/cpumemory.pdf>this is a great paper.</a>.</p><p>an example program using the new arena allocator:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#f92672>package</span> <span style=color:#a6e22e>main</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> (
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;fmt&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;log&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;os&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;runtime&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;runtime/pprof&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;time&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;github.com/apache/arrow/go/v12/arrow&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;github.com/apache/arrow/go/v12/arrow/array&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;github.com/apache/arrow/go/v12/arrow/memory&#34;</span>
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>f</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Create</span>(<span style=color:#e6db74>&#34;profile.prof&#34;</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>pprof</span>.<span style=color:#a6e22e>StartCPUProfile</span>(<span style=color:#a6e22e>f</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>pprof</span>.<span style=color:#a6e22e>StopCPUProfile</span>()
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>now</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>time</span>.<span style=color:#a6e22e>Now</span>()
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>alloc</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>memory</span>.<span style=color:#a6e22e>NewGoArenaAllocator</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>mem</span> <span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>MemStats</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;memory baseline...&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>ReadMemStats</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>mem</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>Alloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>TotalAlloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>HeapAlloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>HeapSys</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>:=</span> <span style=color:#ae81ff>0</span>; <span style=color:#a6e22e>i</span> &lt; <span style=color:#ae81ff>1000000</span>; <span style=color:#a6e22e>i</span><span style=color:#f92672>++</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>run</span>(<span style=color:#a6e22e>alloc</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>time</span>.<span style=color:#a6e22e>Since</span>(<span style=color:#a6e22e>now</span>))
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>ReadMemStats</span>(<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>mem</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>Alloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>TotalAlloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>HeapAlloc</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#a6e22e>mem</span>.<span style=color:#a6e22e>HeapSys</span>)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>run</span>(<span style=color:#a6e22e>alloc</span> <span style=color:#a6e22e>memory</span>.<span style=color:#a6e22e>Allocator</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>NewFixedSizeListBuilder</span>(<span style=color:#a6e22e>alloc</span>, <span style=color:#ae81ff>3</span>, <span style=color:#a6e22e>arrow</span>.<span style=color:#a6e22e>PrimitiveTypes</span>.<span style=color:#a6e22e>Int64</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>Release</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>ValueBuilder</span>().(<span style=color:#f92672>*</span><span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>Int64Builder</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Reserve</span>(<span style=color:#ae81ff>10</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#66d9ef>true</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>2</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>AppendNull</span>()
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>AppendValues</span>([]<span style=color:#66d9ef>int64</span>{<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>}, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#66d9ef>true</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>3</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>4</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>5</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#66d9ef>true</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>6</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>7</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>vb</span>.<span style=color:#a6e22e>Append</span>(<span style=color:#ae81ff>8</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>AppendNull</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>arr</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>lb</span>.<span style=color:#a6e22e>NewArray</span>().(<span style=color:#f92672>*</span><span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>FixedSizeList</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>arr</span>.<span style=color:#a6e22e>Release</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// Output:
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// [25 (null) 1 (null) 3 4 5 6]
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// [7 8 9 10]
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>}
+</span></span></code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>$ go run main.go
+</span></span><span style=display:flex><span>2023/04/14 23:59:58 memory baseline...
+</span></span><span style=display:flex><span>2023/04/14 23:59:58 <span style=color:#ae81ff>10190192</span>
+</span></span><span style=display:flex><span>2023/04/14 23:59:58 <span style=color:#ae81ff>10190192</span>
+</span></span><span style=display:flex><span>2023/04/14 23:59:58 <span style=color:#ae81ff>10190192</span>
+</span></span><span style=display:flex><span>2023/04/14 23:59:58 <span style=color:#ae81ff>12156928</span>
+</span></span><span style=display:flex><span>2.218185631s
+</span></span><span style=display:flex><span>2023/04/15 00:00:00 <span style=color:#ae81ff>892640320</span>
+</span></span><span style=display:flex><span>2023/04/15 00:00:00 <span style=color:#ae81ff>1975439680</span>
+</span></span><span style=display:flex><span>2023/04/15 00:00:00 <span style=color:#ae81ff>892640320</span>
+</span></span><span style=display:flex><span>2023/04/15 00:00:00 <span style=color:#ae81ff>1119322112</span>
+</span></span></code></pre></div><p>Replacing <code>alloc := memory.NewGoArenaAllocator()</code> -> <code>alloc := memory.NewGoAllocator()</code> gives the following response.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>$ go run main.go
+</span></span><span style=display:flex><span>2023/04/15 00:04:37 memory baseline...
+</span></span><span style=display:flex><span>2023/04/15 00:04:37 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:37 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:37 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:37 <span style=color:#ae81ff>3932160</span>
+</span></span><span style=display:flex><span>1.285498898s
+</span></span><span style=display:flex><span>2023/04/15 00:04:38 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:38 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:38 <span style=color:#ae81ff>1788424</span>
+</span></span><span style=display:flex><span>2023/04/15 00:04:38 <span style=color:#ae81ff>3932160</span>
+</span></span><span style=display:flex><span>1.285526056s
+</span></span></code></pre></div><p>Shows that in when using the <code>GoAllocator</code> we put everything on the stack while the <code>GoArenaAllocator</code> makes a large amount of heap allocations.</p><h1 id=tests>Tests</h1><p>Which the following tests,</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#f92672>package</span> <span style=color:#a6e22e>memory</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> (
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;testing&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;github.com/stretchr/testify/assert&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;github.com/stretchr/testify/require&#34;</span>
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// requires export GOEXPERIMENT=arenas to be set
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>TestMemory</span>(<span style=color:#a6e22e>t</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>testing</span>.<span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>NewGoArenaAllocator</span>()
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>require</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#ae81ff>0</span>, <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>CheckSize</span>())
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>s1</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Allocate</span>(<span style=color:#ae81ff>10</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>require</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#ae81ff>1</span>, <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>CheckSize</span>())
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>s2</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Allocate</span>(<span style=color:#ae81ff>11</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>require</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#ae81ff>2</span>, <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>CheckSize</span>())
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Free</span>(<span style=color:#a6e22e>s1</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>require</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#ae81ff>1</span>, <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>CheckSize</span>())
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>Free</span>(<span style=color:#a6e22e>s2</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>require</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#ae81ff>0</span>, <span style=color:#a6e22e>a</span>.<span style=color:#a6e22e>CheckSize</span>())
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>TestNewGoArenaAllocator_Allocate</span>(<span style=color:#a6e22e>t</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>testing</span>.<span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>tests</span> <span style=color:#f92672>:=</span> []<span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>name</span> <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>sz</span>   <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>	}{
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;lt alignment&#34;</span>, <span style=color:#ae81ff>33</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;gt alignment unaligned&#34;</span>, <span style=color:#ae81ff>65</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;eq alignment&#34;</span>, <span style=color:#ae81ff>64</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;large unaligned&#34;</span>, <span style=color:#ae81ff>4097</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;large aligned&#34;</span>, <span style=color:#ae81ff>8192</span>},
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>test</span> <span style=color:#f92672>:=</span> <span style=color:#66d9ef>range</span> <span style=color:#a6e22e>tests</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>t</span>.<span style=color:#a6e22e>Run</span>(<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>name</span>, <span style=color:#66d9ef>func</span>(<span style=color:#a6e22e>t</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>testing</span>.<span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>alloc</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>NewGoArenaAllocator</span>()
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>buf</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>alloc</span>.<span style=color:#a6e22e>Allocate</span>(<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>sz</span>)
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>assert</span>.<span style=color:#a6e22e>NotNil</span>(<span style=color:#a6e22e>t</span>, <span style=color:#a6e22e>buf</span>)
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>assert</span>.<span style=color:#a6e22e>Len</span>(<span style=color:#a6e22e>t</span>, <span style=color:#a6e22e>buf</span>, <span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>sz</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>alloc</span>.<span style=color:#a6e22e>Free</span>(<span style=color:#a6e22e>buf</span>)
+</span></span><span style=display:flex><span>		})
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>TestGoArenaAllocator_Reallocate</span>(<span style=color:#a6e22e>t</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>testing</span>.<span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>tests</span> <span style=color:#f92672>:=</span> []<span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>name</span>     <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>sz1</span>, <span style=color:#a6e22e>sz2</span> <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>	}{
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;smaller&#34;</span>, <span style=color:#ae81ff>200</span>, <span style=color:#ae81ff>100</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;same&#34;</span>, <span style=color:#ae81ff>200</span>, <span style=color:#ae81ff>200</span>},
+</span></span><span style=display:flex><span>		{<span style=color:#e6db74>&#34;larger&#34;</span>, <span style=color:#ae81ff>200</span>, <span style=color:#ae81ff>300</span>},
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>test</span> <span style=color:#f92672>:=</span> <span style=color:#66d9ef>range</span> <span style=color:#a6e22e>tests</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>t</span>.<span style=color:#a6e22e>Run</span>(<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>name</span>, <span style=color:#66d9ef>func</span>(<span style=color:#a6e22e>t</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>testing</span>.<span style=color:#a6e22e>T</span>) {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>alloc</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>NewGoArenaAllocator</span>()
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>buf</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>alloc</span>.<span style=color:#a6e22e>Allocate</span>(<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>sz1</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>:=</span> <span style=color:#66d9ef>range</span> <span style=color:#a6e22e>buf</span> {
+</span></span><span style=display:flex><span>				<span style=color:#a6e22e>buf</span>[<span style=color:#a6e22e>i</span>] = byte(<span style=color:#a6e22e>i</span> <span style=color:#f92672>&amp;</span> <span style=color:#ae81ff>0xFF</span>)
+</span></span><span style=display:flex><span>			}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>exp</span> <span style=color:#f92672>:=</span> make([]<span style=color:#66d9ef>byte</span>, <span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>sz2</span>)
+</span></span><span style=display:flex><span>			copy(<span style=color:#a6e22e>exp</span>, <span style=color:#a6e22e>buf</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>newBuf</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>alloc</span>.<span style=color:#a6e22e>Reallocate</span>(<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>sz2</span>, <span style=color:#a6e22e>buf</span>)
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>assert</span>.<span style=color:#a6e22e>Equal</span>(<span style=color:#a6e22e>t</span>, <span style=color:#a6e22e>exp</span>, <span style=color:#a6e22e>newBuf</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>alloc</span>.<span style=color:#a6e22e>Free</span>(<span style=color:#a6e22e>newBuf</span>)
+</span></span><span style=display:flex><span>		})
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h1 id=links>Links</h1><ul><li><a href=https://stackoverflow.com/questions/34860366/why-buffers-should-be-aligned-on-64-byte-boundary-for-best-performance>https://stackoverflow.com/questions/34860366/why-buffers-should-be-aligned-on-64-byte-boundary-for-best-performance</a></li><li><a href="https://en.wikipedia.org/wiki/Data_structure_alignment#:~:text=A%20memory%20address%20a%20is,address%20specifies%20a%20different%20byte">https://en.wikipedia.org/wiki/Data_structure_alignment#:~:text=A%20memory%20address%20a%20is,address%20specifies%20a%20different%20byte</a>.</li></ul></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2023 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
