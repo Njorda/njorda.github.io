@@ -88,6 +88,7 @@ Everything should work now so lets test it!
     dbt run
 ```
 
+This should run dbt and populate your bq dataset.
 ![This should run dbt and populate your bq dataset.](/img/dbt_test_bq.png)
 
 ## Conclusion
