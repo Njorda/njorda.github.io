@@ -27,7 +27,7 @@ In this post, you will learn how to set up a basic dbt project in Google Cloud P
 
 
 4. Create a bq data_set that is multi regional in the EU(I am based in eu, but you can use US if you want)
-![Create dataset](/img/artifact_registry_kubeflow.png)
+![Create dataset](/img/dbt_test_create_dataset_bq.png)
 
 ## Running dbt
 

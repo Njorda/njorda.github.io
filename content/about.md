@@ -9,3 +9,7 @@ Some open source project Niklas has contributed to:
 
 ## Johan
 **_Johan_** is a Machine Learning engineer working on forecasting and life time value modeling 🔎 .
+
+Some open source project Niklas has contributed to: 
+- [kubeflow pipelines](https://github.com/kubeflow/pipelines)
+- [scikit-learn](https://github.com/JohanWork/scikit-learn)
