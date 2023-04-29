@@ -131,4 +131,4 @@ This code snipet demonstrates how to create a simple Kubeflow pipeline using the
 This code snippet uploads the compiled pipeline YAML file (local_run.yaml) to the Kubeflow Pipelines registry. The upload_pipeline function is used to submit the pipeline with specified tags and a description. The tags help with versioning and identification of the pipeline, while the description provides additional context about the pipeline's purpose.
 
 You should now have something like this but with one version in gcp. 
-![Alt text](../../static/img/artifact_registry_kubeflow_versions.png)
+![Alt text](/img/artifact_registry_kubeflow_versions.png). You can find the code here in [github](https://github.com/Njorda/kubeflow-pipelines/blob/main/notebooks/vertex_artifact_registry_kubeflow_pipelines.ipynb)
