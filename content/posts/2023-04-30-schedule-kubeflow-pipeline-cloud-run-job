@@ -1,0 +1,50 @@
+
+
+
+1. Create pipeline and push to artifact registry 
+
+2. Python script pull kubeflow pipeline from artifact registry and push to vertex ai. 
+
+3. Build it into a docker container 
+
+4. Push docker container to artifact resitry 
+
+Read more [here](https://cloud.google.com/sdk/gcloud/reference/artifacts/repositories/create#--kms-key)
+```bash 
+    gcloud artifacts repositories create docker-test \
+        --repository-format=docker \
+        --location=europe-north1 \
+        --description="test artifact registry" \
+        --async
+```
+
+
+Read more [here](https://cloud.google.com/sdk/gcloud/reference/builds/submit#--region)
+
+```bash
+    gcloud builds submit -t europe-north1-docker.pkg.dev/johan-kubeflow/docker-test/test
+```
+
+5. Create cloud run jobs 
+
+make sure you have an update version of gcloud otherwise [update](https://cloud.google.com/sdk/gcloud/reference/components/update)
+
+Read more [here](https://cloud.google.com/run/docs/create-jobs)
+```bash 
+    gcloud run jobs create test-kubeflow-cloud-job --image europe-north1-docker.pkg.dev/johan-kubeflow/docker-test/test --region europe-west1
+```
+
+6. Enable the api! 
+
+https://console.cloud.google.com/apis/library/cloudscheduler.googleapis.com
+
+Create a schedule to the jobs 
+
+
+```bash 
+    gcloud scheduler jobs create http test-kubeflow-cloud-job-schedule \
+    --location europe-west1 \
+    --schedule="0 12 * * *" \
+    --uri="https://europe-west1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/johan-kubeflow/jobs/test-kubeflow-cloud-job:run" \
+    --http-method POST \
+```
