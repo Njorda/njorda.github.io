@@ -16,7 +16,7 @@ By using GCP Artifact Registry to store Kubeflow Pipeline templates, you can tak
 
 Stay tuned for more blog posts in this series, where we will dive deeper into machine learning concepts and MLOps using Kubeflow Pipelines on GCP Vertex AI.
 
-## Setting upp your enviorment
+## Setting upp your enviorm_ent
 
 You can either use the dev container or follow the instructions [here](https://njordy.com/2023/03/21/kubeflow-pipelines/).  
 

@@ -24,9 +24,7 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	for i := 0; i < 100000; i++ {
-		arrowFunc()
-	}
+	arrowFunc()
 }
 
 func arrowFunc() {
