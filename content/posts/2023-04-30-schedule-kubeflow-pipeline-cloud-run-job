@@ -1,13 +1,102 @@
+0. Enable the following gcp apis! 
 
-
+```bash 
+Artifact Registry API 
+Vertex AI API
+Cloud Resource Manager API
+Compute Engine API
+```
 
 1. Create pipeline and push to artifact registry 
 
-2. Python script pull kubeflow pipeline from artifact registry and push to vertex ai. 
+Create a kubeflow pipeline artifat registry 
 
-3. Build it into a docker container 
+```bash
+    gcloud artifacts repositories create kubeflow-test \
+        --repository-format=kfp \
+        --location=europe-west1 \
+        --description="test kubeflow pipeline artifact registry" \
+```
 
-4. Push docker container to artifact resitry 
+Create a simple kfp pipeline and push to the new artifact registry.  You can read more about it in a previous blog post about kfp. 
+
+```python 
+import kfp.dsl as dsl
+import os
+from dotenv import load_dotenv
+from kfp.v2.dsl import component
+from kfp.v2 import compiler
+from google.cloud import aiplatform as aip
+from kfp.registry import RegistryClient
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
+
+# Retrieve required environment variables
+bucket = os.getenv("bucket")
+gcp_project = os.getenv("gcp_project")
+gcp_service_account = os.getenv("gcp_service_account")
+kubeflow_pipelines_artifact_registyr = os.getenv('kubeflow_pipelines_artifact_registyr')
+
+# Define the model training function
+def train_model(input: float) -> float:
+    return 2.0 + input
+
+# Define the data ingestion function
+def ingetst_data(input: float) -> float:
+    return 2.0
+
+# Create components for the ingestion and training functions
+ingest_data_component = component(ingetst_data)
+train_component = component(train_model)
+
+# Define the pipeline using the Kubeflow Pipelines SDK
+@dsl.pipeline(
+    name="ltv-train",
+)
+def add_pipeline():
+    # Instantiate the ingest_data_component and store its output
+    ingest_data = ingest_data_component(input=3.0)
+    
+    # Instantiate the train_component, passing the output from the ingest_data_component
+    train_model = train_component(input=ingest_data.output)
+    
+    # Disable caching for the train_model component to ensure it runs every time
+    train_model.set_caching_options(False)
+
+# Compile the pipeline to generate a YAML file for execution
+compiler.Compiler().compile(pipeline_func=add_pipeline, package_path="local_run.yaml")
+
+# Create a RegistryClient instance and connect to the Kubeflow Pipelines Artifact Registry
+client = RegistryClient(host=f"https://europe-west1-kfp.pkg.dev/{gcp_project}/{kubeflow_pipelines_artifact_registyr}")
+
+# Upload the pipeline to the Kubeflow Pipelines registry
+templateName, versionName = client.upload_pipeline(
+    # Provide the compiled pipeline YAML file
+    file_name="local_run.yaml",
+    
+    # Assign tags to the pipeline for easier identification and versioning
+    tags=["v1", "latest"],
+    
+    # Add a description to the pipeline using extra_headers
+    extra_headers={"description": "This is an example pipeline template."}
+)
+```
+
+
+2. When running a kubeflow pipeline on vertex, the projects default compute account will be use, however this account dose not have access to the storage bucket you have created. You need to add it manually in IAM. 
+
+3.  Create a bucket
+```bash 
+gcloud storage buckets create gs://kubeflow-test-bucket-dev-2 --location europe-west1 --no-uniform-bucket-level-access
+```
+
+4. Python script pull kubeflow pipeline from artifact registry and push to vertex ai. 
+
+5. Build it into a docker container 
+
+6. Push docker container to artifact resitry 
 
 Read more [here](https://cloud.google.com/sdk/gcloud/reference/artifacts/repositories/create#--kms-key)
 ```bash 
@@ -25,7 +114,7 @@ Read more [here](https://cloud.google.com/sdk/gcloud/reference/builds/submit#--r
     gcloud builds submit -t europe-north1-docker.pkg.dev/johan-kubeflow/docker-test/test
 ```
 
-5. Create cloud run jobs 
+7. Create cloud run jobs 
 
 make sure you have an update version of gcloud otherwise [update](https://cloud.google.com/sdk/gcloud/reference/components/update)
 
@@ -34,12 +123,11 @@ Read more [here](https://cloud.google.com/run/docs/create-jobs)
     gcloud run jobs create test-kubeflow-cloud-job --image europe-north1-docker.pkg.dev/johan-kubeflow/docker-test/test --region europe-west1
 ```
 
-6. Enable the api! 
+8. Enable the api! 
 
 https://console.cloud.google.com/apis/library/cloudscheduler.googleapis.com
 
-Create a schedule to the jobs 
-
+Create a schedule to the cloud run jobs 
 
 ```bash 
     gcloud scheduler jobs create http test-kubeflow-cloud-job-schedule \
@@ -48,3 +136,4 @@ Create a schedule to the jobs
     --uri="https://europe-west1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/johan-kubeflow/jobs/test-kubeflow-cloud-job:run" \
     --http-method POST \
 ```
+
