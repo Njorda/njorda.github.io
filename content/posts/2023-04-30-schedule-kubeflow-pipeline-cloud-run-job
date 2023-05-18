@@ -1,11 +1,26 @@
+---
+layout: post
+title: "Setting up Kubeflow Pipelines with Vertex AI and Cloud Run in GCP"
+subtitle: "Learn how to create a Kubeflow pipeline, host it in Artifact Registry, run it on Vertex AI, and automate execution using Cloud Run in Google Cloud Platform."
+date: 2023-05-18
+author: "Johan Hansson"
+URL: "/2023/05/18/setting-up-kubeflow-pipelines-vertex-ai-cloud-run-gcp"
+image: "/img/kubeflow_vertexai_cloudrun.png"
+---
+
+In this blog post, we'll explore how to set up Kubeflow Pipelines with Vertex AI and Cloud Run in Google Cloud Platform (GCP). We'll create a Kubeflow pipeline, host it in the Artifact Registry, run it on Vertex AI, and finally automate its execution using Cloud Run. This post assumes that you have some basic understanding of GCP services, Kubernetes, and Kubeflow Pipelines.
+
+The code to this blog post can be found [here](https://github.com/Njorda/kubeflow-schedule-pipeline-vertex-cloud-run-job)
+
 0. Enable the following gcp apis! 
 
 ```bash 
-Artifact Registry API 
-Vertex AI API
-Cloud Resource Manager API
-Compute Engine API
+    Artifact Registry API 
+    Vertex AI API
+    Cloud Resource Manager API
+    Compute Engine API
 ```
+
 
 1. Create pipeline and push to artifact registry 
 
@@ -18,85 +33,145 @@ Create a kubeflow pipeline artifat registry
         --description="test kubeflow pipeline artifact registry" \
 ```
 
+Create a bucket
+```bash 
+    gcloud storage buckets create gs://kubeflow-test-bucket-dev-2 --location europe-west1 --no-uniform-bucket-level-access
+```
+
 Create a simple kfp pipeline and push to the new artifact registry.  You can read more about it in a previous blog post about kfp. 
 
 ```python 
-import kfp.dsl as dsl
-import os
-from dotenv import load_dotenv
-from kfp.v2.dsl import component
-from kfp.v2 import compiler
-from google.cloud import aiplatform as aip
-from kfp.registry import RegistryClient
-from dotenv import load_dotenv
+    import kfp.dsl as dsl
+    import os
+    from dotenv import load_dotenv
+    from kfp.v2.dsl import component
+    from kfp.v2 import compiler
+    from google.cloud import aiplatform as aip
+    from kfp.registry import RegistryClient
+    from dotenv import load_dotenv
 
-# Load environment variables from the .env file
-load_dotenv()
+    # Load environment variables from the .env file
+    load_dotenv()
 
-# Retrieve required environment variables
-bucket = os.getenv("bucket")
-gcp_project = os.getenv("gcp_project")
-gcp_service_account = os.getenv("gcp_service_account")
-kubeflow_pipelines_artifact_registyr = os.getenv('kubeflow_pipelines_artifact_registyr')
+    # Retrieve required environment variables
+    bucket = os.getenv("bucket")
+    gcp_project = os.getenv("gcp_project")
+    gcp_service_account = os.getenv("gcp_service_account")
+    kubeflow_pipelines_artifact_registyr = os.getenv('kubeflow_pipelines_artifact_registyr')
 
-# Define the model training function
-def train_model(input: float) -> float:
-    return 2.0 + input
+    # Define the model training function
+    def train_model(input: float) -> float:
+        return 2.0 + input
 
-# Define the data ingestion function
-def ingetst_data(input: float) -> float:
-    return 2.0
+    # Define the data ingestion function
+    def ingetst_data(input: float) -> float:
+        return 2.0
 
-# Create components for the ingestion and training functions
-ingest_data_component = component(ingetst_data)
-train_component = component(train_model)
+    # Create components for the ingestion and training functions
+    ingest_data_component = component(ingetst_data)
+    train_component = component(train_model)
 
-# Define the pipeline using the Kubeflow Pipelines SDK
-@dsl.pipeline(
-    name="ltv-train",
-)
-def add_pipeline():
-    # Instantiate the ingest_data_component and store its output
-    ingest_data = ingest_data_component(input=3.0)
-    
-    # Instantiate the train_component, passing the output from the ingest_data_component
-    train_model = train_component(input=ingest_data.output)
-    
-    # Disable caching for the train_model component to ensure it runs every time
-    train_model.set_caching_options(False)
+    # Define the pipeline using the Kubeflow Pipelines SDK
+    @dsl.pipeline(
+        name="ltv-train",
+    )
+    def add_pipeline():
+        # Instantiate the ingest_data_component and store its output
+        ingest_data = ingest_data_component(input=3.0)
+        
+        # Instantiate the train_component, passing the output from the ingest_data_component
+        train_model = train_component(input=ingest_data.output)
+        
+        # Disable caching for the train_model component to ensure it runs every time
+        train_model.set_caching_options(False)
 
-# Compile the pipeline to generate a YAML file for execution
-compiler.Compiler().compile(pipeline_func=add_pipeline, package_path="local_run.yaml")
+    # Compile the pipeline to generate a YAML file for execution
+    compiler.Compiler().compile(pipeline_func=add_pipeline, package_path="local_run.yaml")
 
-# Create a RegistryClient instance and connect to the Kubeflow Pipelines Artifact Registry
-client = RegistryClient(host=f"https://europe-west1-kfp.pkg.dev/{gcp_project}/{kubeflow_pipelines_artifact_registyr}")
+    # Create a RegistryClient instance and connect to the Kubeflow Pipelines Artifact Registry
+    client = RegistryClient(host=f"https://europe-west1-kfp.pkg.dev/{gcp_project}/{kubeflow_pipelines_artifact_registyr}")
 
-# Upload the pipeline to the Kubeflow Pipelines registry
-templateName, versionName = client.upload_pipeline(
-    # Provide the compiled pipeline YAML file
-    file_name="local_run.yaml",
-    
-    # Assign tags to the pipeline for easier identification and versioning
-    tags=["v1", "latest"],
-    
-    # Add a description to the pipeline using extra_headers
-    extra_headers={"description": "This is an example pipeline template."}
-)
+    # Upload the pipeline to the Kubeflow Pipelines registry
+    templateName, versionName = client.upload_pipeline(
+        # Provide the compiled pipeline YAML file
+        file_name="local_run.yaml",
+        
+        # Assign tags to the pipeline for easier identification and versioning
+        tags=["v1", "latest"],
+        
+        # Add a description to the pipeline using extra_headers
+        extra_headers={"description": "This is an example pipeline template."}
+    )
 ```
-
 
 2. When running a kubeflow pipeline on vertex, the projects default compute account will be use, however this account dose not have access to the storage bucket you have created. You need to add it manually in IAM. 
 
-3.  Create a bucket
-```bash 
-gcloud storage buckets create gs://kubeflow-test-bucket-dev-2 --location europe-west1 --no-uniform-bucket-level-access
-```
-
 4. Python script pull kubeflow pipeline from artifact registry and push to vertex ai. 
 
-5. Build it into a docker container 
+```python 
+    # This script sets up the connection to a Kubeflow Pipelines Artifact Registry
+    # using the RegistryClient from the kfp.registry module. It loads the necessary
+    # environment variables and establishes a connection to the registry.
 
-6. Push docker container to artifact resitry 
+    import os
+    from kfp.registry import RegistryClient
+    from dotenv import load_dotenv
+    from google.cloud import aiplatform as aip
+
+    # Load environment variables from the .env file
+    load_dotenv()
+
+    # Retrieve required environment variables
+    gcp_project = os.getenv("gcp_project","johan-kubeflow")
+    kubeflow_pipelines_artifact_registyr = os.getenv('kubeflow_pipelines_artifact_registyr',"test-test")
+    package_name = 'ltv-train'
+    tag = 'latest'
+    bucket = 'gs://test-test-test-johan'
+
+    # Create a RegistryClient instance and connect to the Kubeflow Pipelines Artifact Registry
+    client = RegistryClient(host=f"https://europe-west1-kfp.pkg.dev/{gcp_project}/{kubeflow_pipelines_artifact_registyr}")
+
+    print(client.list_packages())
+
+    filename = client.download_pipeline(
+    package_name = package_name,
+    tag = tag,
+    file_name = 'loca_file.yaml'
+    )
+
+    job = aip.PipelineJob(
+        #job_id='test' # TODO se in the future
+        display_name="First kubeflow pipeline",
+        template_path="loca_file.yaml",
+        pipeline_root=bucket,
+        location="europe-west1",
+        project=gcp_project,
+    )
+
+    job.submit()
+
+```
+
+
+5. Build it into a docker container 
+See the docker file below
+
+```bash
+    FROM python:3.10
+
+    COPY .devcontainer/requirements.txt requirements.txt 
+    RUN pip install --upgrade pip
+    RUN pip install -r requirements.txt
+
+    COPY trigger_kubeflow_pipeline_vertex.py trigger_kubeflow_pipeline_vertex.py
+
+    # gcloud builds submit -t europe-north1-docker.pkg.dev/<your project>/docker-test/test
+
+    CMD ["python","trigger_kubeflow_pipeline_vertex.py"]
+```
+
+
+6. Create an artiact registry registry 
 
 Read more [here](https://cloud.google.com/sdk/gcloud/reference/artifacts/repositories/create#--kms-key)
 ```bash 
@@ -110,9 +185,12 @@ Read more [here](https://cloud.google.com/sdk/gcloud/reference/artifacts/reposit
 
 Read more [here](https://cloud.google.com/sdk/gcloud/reference/builds/submit#--region)
 
+7. Build/push an docker image
+
 ```bash
     gcloud builds submit -t europe-north1-docker.pkg.dev/johan-kubeflow/docker-test/test
 ```
+
 
 7. Create cloud run jobs 
 
