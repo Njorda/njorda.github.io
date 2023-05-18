@@ -14,6 +14,8 @@ The code to this blog post can be found [here](https://github.com/Njorda/kubeflo
 
 0. Enable the following gcp apis! 
 
+These are the APIs that are needed to interact with the Google Cloud resources used in the pipeline. They should be enabled before running the subsequent commands.
+
 ```bash 
     Artifact Registry API 
     Vertex AI API
@@ -23,6 +25,7 @@ The code to this blog post can be found [here](https://github.com/Njorda/kubeflo
 
 
 1. Create pipeline and push to artifact registry 
+Here, we're setting up an Artifact Registry to store our Kubeflow Pipeline (KFP) artifacts. We then create a simple Kubeflow Pipeline which includes functions to train a model and ingest data. Once the pipeline is compiled into a YAML file, it's pushed to the Artifact Registry we've just set up.
 
 Create a kubeflow pipeline artifat registry 
 
