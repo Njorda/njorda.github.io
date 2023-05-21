@@ -2,7 +2,7 @@
 layout: post
 title: "Bloom filters"
 subtitle: "Push based vs pull based query engine for OLAP"
-date: 2023-04-14
+date: 2023-05-18
 author: "Niklas Hansson"
 URL: "/2023/05/17push_based_query_engine"
 ---

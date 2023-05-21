@@ -27,7 +27,6 @@ func New(hashes int, cardinality uint64) *bloom {
 		h:                    sha1.New(),
 		bloomFilter:          bloomFilter,
 	}
-
 }
 
 func (b *bloom) hash(input []byte) ([]uint64, error) {

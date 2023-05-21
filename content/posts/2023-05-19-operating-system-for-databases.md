@@ -3,7 +3,7 @@ layout: post
 title: "DBOS: A Database-Oriented
 Operating System"
 subtitle: "Will the future OS be built on top of a database?"
-date: 2023-04-14
+date: 2023-05-19
 author: "Niklas Hansson"
 URL: "/2023/05/19/operating_system_databases"
 ---
