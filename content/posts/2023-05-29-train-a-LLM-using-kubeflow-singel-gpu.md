@@ -18,7 +18,7 @@ The pipeline has two components, the first one ingests data the second starts th
 gcloud default auth
 ```
 
-You also need to make sure you have a Quota on gpu and more specifycly NVIDIA_TESLA_T4 in the region europe-west1. If not you need to request in from the IAM porta on gcp and quotas, this normaly takes two works days. And in my case I hade to pre pay 10 euros to google. 
+You also need to make sure you have a Quota on gpu and more specifycly NVIDIA_TESLA_T4 in the region europe-west1. If not you need to request in from the IAM porta on gcp and quotas, this normaly takes two works days. And in my case I hade to pre pay 10 euros to google. You can find the full notebook [here](https://github.com/Njorda/kubeflowpipline_LLM).
 
 
 
