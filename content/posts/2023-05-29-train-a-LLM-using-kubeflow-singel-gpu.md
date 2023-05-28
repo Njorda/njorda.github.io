@@ -26,7 +26,7 @@ You also need to make sure you have a Quota on gpu and more specifycly NVIDIA_TE
 ## Ingest component 
 
 
-The ingests components consists of one file ingest_data.py
+The ingests components consists of one file ingest_data.py and ingests the data from huggingface and saves it to disk in short. 
 
 ```python 
 from kfp import compiler
@@ -49,6 +49,8 @@ def inngest_data(df_path:Output[Dataset],model_id:str,dataset:str='Abirate/engli
 
 
 ## Train component 
+
+The train component loads the dataset from disk and fine tunes  the LLM in this case for 10 steps. Be carefull changing this if your just testing the piplines since GPUs can be expensive. 
 
 ```python 
 
@@ -139,6 +141,7 @@ def train_model(df_path:Input[Dataset],model_id:str):
 
 ## The pipeline
 
+The pipeline consists of two components. The Ingest and the train components. The components are using GCP default containers so some huggingface packages needs to be installed to make the conainer work. If you look carefully we are booth installing using github links and pip packages. Using github is not recomende sinc it my change rappadly but the packages we are using has not made it to a stable realeas yet. 
 
 ```python 
 ingest_data_component = component(inngest_data,
