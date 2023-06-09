@@ -14,6 +14,7 @@ Blogs:
 - [Effective go](https://go.dev/doc/effective_go)
 - [Go memory model](https://go.dev/ref/mem)
 - [inline](https://dave.cheney.net/2020/04/25/inlining-optimisations-in-go)
+- [Concurrency patterns](https://github.com/sourcegraph/conc)
 
 Videos: 
 - [Obscure Go Optimisations](https://www.youtube.com/watch?v=rRtihWOcaLI)

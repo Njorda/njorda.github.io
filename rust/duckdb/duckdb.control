@@ -1,0 +1,5 @@
+comment = 'duckdb:  Created by pgx'
+default_version = '@CARGO_VERSION@'
+module_pathname = '$libdir/duckdb'
+relocatable = false
+superuser = true

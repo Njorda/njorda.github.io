@@ -183,8 +183,6 @@ func run(alloc memory.Allocator) {
 ```
 
 
-
-
 ```bash
 $ go run main.go
 2023/04/14 23:59:58 memory baseline...
@@ -217,7 +215,7 @@ $ go run main.go
 1.285526056s
 ```
 
-Shows that in when using the `GoAllocator` we put everything on the stack while the `GoArenaAllocator` makes a large amount of heap allocations. 
+Shows that in when using the `GoAllocator` we put everything on the stack while the `GoArenaAllocator` makes a large amount of heap allocations. Thus we can also see that the `GoAllocator` seems to be a lot faster, this makes sense since the heap is a more complex data structure to use and the heap allocations involves more CPU instructions than the stack allocations. 
 
 # Tests
 
@@ -303,3 +301,4 @@ func TestGoArenaAllocator_Reallocate(t *testing.T) {
 
 - https://stackoverflow.com/questions/34860366/why-buffers-should-be-aligned-on-64-byte-boundary-for-best-performance
 - https://en.wikipedia.org/wiki/Data_structure_alignment#:~:text=A%20memory%20address%20a%20is,address%20specifies%20a%20different%20byte.
+- https://stackoverflow.com/questions/2264969/why-is-memory-allocation-on-heap-much-slower-than-on-stack
