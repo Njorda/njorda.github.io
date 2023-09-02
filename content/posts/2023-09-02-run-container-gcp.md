@@ -7,7 +7,7 @@ author: "Johan Hansson"
 URL: "/2023/09/02/docker-iterations"
 ---
 
-# How to Quickly Run a Docker Image on GCP
+# Run docker container in GCP cloud shell
 
 In this blog post, we will briefly go over how to build and run a Docker container as quickly as possible on Google Cloud Platform (GCP).
 
@@ -29,7 +29,7 @@ gcloud builds submit --project <gcp_project> --tag <docker_image_tag> .
 
 Once the build is complete, you can check to ensure that the container has been pushed to Artifact Registry.
 
-Now it's time to run the container. The quickest way to do this is using Cloud Shell. ![Cloud Shell](/img/dbt_test_create_dataset_bq.png)
+Now it's time to run the container. The quickest way to do this is using Cloud Shell. ![Cloud Shell](/img/add_code_shell.png)
 
 Before running the container, authenticate the shell by executing the command below:
 
