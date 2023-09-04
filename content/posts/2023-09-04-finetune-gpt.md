@@ -4,7 +4,7 @@ title: "How to finetune gpt3.5 turbo"
 subtitle: "When you need to test a docker container fast"
 date: 2023-09-02
 author: "Johan Hansson"
-URL: "/2023/09/02/finetune-gpt3.5-turbo"
+URL: "/2023/09/02/finetune-gpt3-5-turbo"
 ---
 
 # Way finetune 
