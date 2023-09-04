@@ -29,7 +29,7 @@ gcloud builds submit --project <gcp_project> --tag <docker_image_tag> .
 
 Once the build is complete, you can check to ensure that the container has been pushed to Artifact Registry.
 
-Now it's time to run the container. The quickest way to do this is using Cloud Shell. ![Cloud Shell](/img/add_code_shell.png)
+Now it's time to run the container. The quickest way to do this is using Cloud Shell. ![Cloud Shell](/img/cloud_shell.png)
 
 Before running the container, authenticate the shell by executing the command below:
 
