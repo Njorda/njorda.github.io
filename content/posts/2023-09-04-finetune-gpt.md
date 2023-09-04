@@ -19,7 +19,7 @@ The code for this tutorial can be found [here](https://github.com/Njorda/finetun
 
 # Step by step guide 
 
-First you need to create an openAI api_key. The eaiest way to do this is through the openAI web page under API keys. ![API keys](/img/open_ai_key.png). Copy the key and add it to an env file with the name open_ai. 
+First you need to create an openAI api_key. The eaiest way to do this is through the openAI web page under API keys. ![API keys](/img/open_ai_api_key.png). Copy the key and add it to an env file with the name open_ai. 
 
 ## Import Libraries and Set API Key
 
