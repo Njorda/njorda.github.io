@@ -24,7 +24,7 @@ After creating the Dockerfile, the next step is to build and push the image to A
 Replace `<gcp_project>` with your GCP project ID and `<docker_image_tag>` with the desired Artifact Registry location and name for the container:
 
 ```bash
-gcloud builds submit --project <gcp_project> --tag <docker_image_tag> .
+gcloud builds submit --project <gcp_project> --tag <docker_image_tag> --region <region_to_build_in>.
 ```
 
 Once the build is complete, you can check to ensure that the container has been pushed to Artifact Registry.
