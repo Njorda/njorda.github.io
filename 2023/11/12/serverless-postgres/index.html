@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>How to set up Neon, serverless postgres on k8s - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="All the code can be found here
+In this blog post we will dive in to how to set up neon on your k8s cluster. We will use Minikube but feel free to use the setup of your choice of k8s. The first step is to define the k8s resources. In this case we will take a short cut and start of with generating them from the docker compose files used for testing."><meta property="og:image" content><meta property="og:title" content="How to set up Neon, serverless postgres on k8s"><meta property="og:description" content="All the code can be found here
+In this blog post we will dive in to how to set up neon on your k8s cluster. We will use Minikube but feel free to use the setup of your choice of k8s. The first step is to define the k8s resources. In this case we will take a short cut and start of with generating them from the docker compose files used for testing."><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2023/11/12/serverless-postgres/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2023-11-12T00:00:00+00:00"><meta property="article:modified_time" content="2023-11-12T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="How to set up Neon, serverless postgres on k8s"><meta name=twitter:description content="All the code can be found here
+In this blog post we will dive in to how to set up neon on your k8s cluster. We will use Minikube but feel free to use the setup of your choice of k8s. The first step is to define the k8s resources. In this case we will take a short cut and start of with generating them from the docker compose files used for testing."><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>How to set up Neon, serverless postgres on k8s</h1><div class=meta>Posted on Nov 12, 2023</div></div><section class=body><p>All the code can be found <a href=https://github.com/Njorda/neon-setup>here</a></p><p>In this blog post we will dive in to how to set up <a href=https://github.com/neondatabase/neon>neon</a> on your k8s cluster. We will use <a href=https://minikube.sigs.k8s.io/docs/start/>Minikube</a> but feel free to use the setup of your choice of k8s. The first step is to define the k8s resources. In this case we will take a short cut and start of with generating them from the <a href=https://github.com/neondatabase/neon/blob/release-4179/docker-compose/docker-compose.yml>docker compose files</a> used for testing. For this we will use <a href=https://kubernetes.io/docs/tasks/configure-pod-container/translate-compose-kubernetes/>kompsoe</a> from the compose directory:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>kompose --file docker-compose.yml convert
+</span></span></code></pre></div><p>This is a great start but sadly it will not be a one hit wonder. First of all we need to understand a bit more what the docker compose set up is actually doing(in order to understand how neon works) and specifically the scripts inside <a href=https://github.com/neondatabase/neon/tree/release-4179/docker-compose/compute_wrapper>/docker-compose/compute_wrapper</a>. The script <code>shell/compute.sh</code> tells most of the story:</p><pre tabindex=0><code>#!/bin/bash
+set -eux
+
+# Generate a random tenant or timeline ID
+#
+# Takes a variable name as argument. The result is stored in that variable.
+generate_id() {
+    local -n resvar=$1
+    printf -v resvar &#39;%08x%08x%08x%08x&#39; $SRANDOM $SRANDOM $SRANDOM $SRANDOM
+}
+
+PG_VERSION=${PG_VERSION:-14}
+
+SPEC_FILE_ORG=/var/db/postgres/specs/spec.json
+SPEC_FILE=/tmp/spec.json
+
+echo &#34;Waiting pageserver become ready.&#34;
+while ! nc -z pageserver 6400; do
+     sleep 1;
+done
+echo &#34;Page server is ready.&#34;
+
+echo &#34;Create a tenant and timeline&#34;
+generate_id tenant_id
+PARAMS=(
+     -sb 
+     -X POST
+     -H &#34;Content-Type: application/json&#34;
+     -d &#34;{\&#34;new_tenant_id\&#34;: \&#34;${tenant_id}\&#34;}&#34;
+     http://pageserver:9898/v1/tenant/
+)
+result=$(curl &#34;${PARAMS[@]}&#34;)
+echo $result | jq .
+
+generate_id timeline_id
+PARAMS=(
+     -sb 
+     -X POST
+     -H &#34;Content-Type: application/json&#34;
+     -d &#34;{\&#34;new_timeline_id\&#34;: \&#34;${timeline_id}\&#34;, \&#34;pg_version\&#34;: ${PG_VERSION}}&#34;
+     &#34;http://pageserver:9898/v1/tenant/${tenant_id}/timeline/&#34;
+)
+result=$(curl &#34;${PARAMS[@]}&#34;)
+echo $result | jq .
+
+echo &#34;Overwrite tenant id and timeline id in spec file&#34;
+sed &#34;s/TENANT_ID/${tenant_id}/&#34; ${SPEC_FILE_ORG} &gt; ${SPEC_FILE}
+sed -i &#34;s/TIMELINE_ID/${timeline_id}/&#34; ${SPEC_FILE}
+
+cat ${SPEC_FILE}
+
+echo &#34;Start compute node&#34;
+/usr/local/bin/compute_ctl --pgdata /var/db/postgres/compute \
+     -C &#34;postgresql://cloud_admin@localhost:55433/postgres&#34;  \
+     -b /usr/local/bin/postgres                              \
+     -S ${SPEC_FILE}
+</code></pre><p>To summarize what is happening here is that we do the following:</p><ol><li>We create a tenant, user, company, customer this is a unique database.</li><li>We create a timeline for the user.</li><li>We update the spec file that will be sent to the compute node in order for it to start up.</li></ol><p>These are steps that normally would not be part fo the compute node but an orchestering layer however since the docker-compose files describe the test step this kind of make sens but is not what we want do do.</p><p>Since I have worked on this project from time to time, i dont know exactly how I changed the k8s resouce but of course leave them in the repo so you can check the diffs if you like to.</p><p>Next we need a k8s cluster, we will use minikbue and thus:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>minkube start
+</span></span></code></pre></div><p>Something that was really tricky to figure out and that took me a long time to understand is how the communication actually works between the service and why it did not work out for me initially and it seems like the pageserver tried to reach the safekeeper over localhost(0.0.0.0). From the neon <a href=https://neon.tech/docs/introduction/architecture-overview>Neon architecture blog post</a> the architecture is described as:</p><p><img src=static/img/neon_architecture.avif alt="neon architecture"></p><p>however one pod that is used in the docker-compose files are not in the diagram, the <a href=https://github.com/neondatabase/neon/blob/3710c32aaed4d699451c850fcf7a0dc21520539e/docker-compose/docker-compose.yml#L149>storage-broker</a>. The storage broker turns out to play an important role. From the <a href=https://github.com/neondatabase/neon/blob/release-4179/docs/storage_broker.md>docs</a> we can understand that the storage broker helps the safekeepers and pageservers learn which nodes also hold their timelines, and timeline statuses there. However the information is based upon the <code>--listen-pg</code> and <code>--listen-http</code> however these are assumed to be localhost in order to handled this the <code>--advertise-pg</code> allows for adding the information what the address should be when we use a service like k8s to run it.</p><p>Check out that nothing is running(at least not something you don&rsquo;t like running) using <code>kubetl get pods --all-namespaces</code>. The nest step is to deploy the resouces:</p><pre tabindex=0><code>kubectl apply -f 
+</code></pre><p>After that we need to start do set up. Part of the docker-compose set up is also to create the bucket which we will use to backup our data. This step was done automatic <a href=https://github.com/neondatabase/neon/blob/3710c32aaed4d699451c850fcf7a0dc21520539e/docker-compose/docker-compose.yml#L27>here</a> we will instead do this through the UI. To do this we need to port-forward and login to minio(user: minio, password: password is the default in the setup).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl port-forward svc/minio 9001:9001
+</span></span></code></pre></div><p>Then you can just jump to local host and login and create the bucket <code>minio</code>. Next step is to create the <code>tenant</code> and the <code>tenantid</code> to do this we need to comunnicate to the <code>pageserver</code> which we will do port-forwarding again:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl port-forward svc/pageserver  9898:9898
+</span></span></code></pre></div><p>I will create the tenant: and timeline: but replace with what ever you like, however REMEMBER to update the spec.json that you will later use in the <code>compute node</code>.</p><p>tenant:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>curl -v -sb -X POST -H <span style=color:#e6db74>&#34;Content-Type: application/json&#34;</span> -d <span style=color:#e6db74>&#39;{&#34;new_tenant_id&#34;: &#34;de200bd42b49cc1814412c7e592dd6e9&#34;}&#39;</span> http://localhost:9898/v1/tenant/
+</span></span></code></pre></div><p>timeline_id:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span> curl  -X POST -H <span style=color:#e6db74>&#34;Content-Type: application/json&#34;</span> -d <span style=color:#e6db74>&#39;{&#34;new_timeline_id&#34;: &#34;de200bd42b49cc1814412c7e592dd6e7&#34;}&#39;</span> http://localhost:9898/v1/tenant/de200bd42b49cc1814412c7e592dd6e9/timeline/
+</span></span></code></pre></div><p>We are now ready to start the compute node, I will build the <code>spec.json</code> file into the container but that is completely up to you how you like to do it!</p><pre tabindex=0><code>docker build -t compute -f Dockerfile .
+</code></pre><p>If you do this in any otherway remember to updat the k8s resource with the correct container. To allow minikube to find the container is use:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>eval <span style=color:#66d9ef>$(</span>minikube docker-env<span style=color:#66d9ef>)</span>
+</span></span></code></pre></div><p>The way i set it up now is so the compute container will busy wait in order to not die.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl exec -it $YOUR_COMPUTE_NODE -- /bin/bash
+</span></span></code></pre></div><p>this step can of course be replaced with just having the correct cmd/args but since I had to hack around to get it to work this was the easiest for me.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>compute_ctl --pgdata /var/db/postgres/compute <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>     -C <span style=color:#e6db74>&#34;postgresql://cloud_admin@localhost:55433/postgres&#34;</span>  <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>     -b /usr/local/bin/postgres                              <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>     -S spec.json
+</span></span></code></pre></div><p>Now you should be ready to connect to your postgres instance, to do it port-forward the compute node</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl port-forward compute-5dc56c7fd9-7cs94  55433:55433
+</span></span></code></pre></div><p>and then use psql:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>psql -p55432 -h 127.0.0.1 -U cloud_admin postgres
+</span></span></code></pre></div><p>Also listening to some of the neon talks it is not clear or not if the compute nodes are running in k8s or as VM:s.</p><p>Happy coding!!!!</p></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2023 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
