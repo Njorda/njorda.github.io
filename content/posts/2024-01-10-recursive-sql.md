@@ -2,7 +2,7 @@
 layout: post
 title: "Recursive queries"
 subtitle: "How to traverse graphs in SQL"
-date: 2023-11-12
+date: 2024-01-10
 author: "Niklas Hansson"
 URL: "/2024/01/10/recursive-sql"
 ---
