@@ -1,10 +1,10 @@
 ---
 layout:     post 
-title:      "Trition with post and pre processing"
-subtitle:   "Ensemble model"
-date:       2023-02-01
+title:      "Prompt engineering"
+subtitle:   "Prompting"
+date:       2023-02-02
 author:     "Niklas Hansson"
-URL: "/2023/02/01/Trition_with_post_and_pre_processing/"
+URL: "/2023/02/01/Prompt_engineering/"
 ---
 
 
