@@ -1,0 +1,133 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Consistent hashing - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="Consistent hashing In this blog post we will dive in to consistent hashing and implement it in go. Lets start with a problem that consistent hashing would help solve. Imagine we have a distributed systems with 3 database. Business is booming and we realize we need to scale out to more shards. Lets assume we selected which node to send the data to using a hash function f(x) and get the node:"><meta property="og:image" content><meta property="og:title" content="Consistent hashing"><meta property="og:description" content="Consistent hashing In this blog post we will dive in to consistent hashing and implement it in go. Lets start with a problem that consistent hashing would help solve. Imagine we have a distributed systems with 3 database. Business is booming and we realize we need to scale out to more shards. Lets assume we selected which node to send the data to using a hash function f(x) and get the node:"><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2024/02/16/consistent_hashing/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2024-02-16T00:00:00+00:00"><meta property="article:modified_time" content="2024-02-16T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Consistent hashing"><meta name=twitter:description content="Consistent hashing In this blog post we will dive in to consistent hashing and implement it in go. Lets start with a problem that consistent hashing would help solve. Imagine we have a distributed systems with 3 database. Business is booming and we realize we need to scale out to more shards. Lets assume we selected which node to send the data to using a hash function f(x) and get the node:"><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>Consistent hashing</h1><div class=meta>Posted on Feb 16, 2024</div></div><section class=body><h1 id=consistent-hashing>Consistent hashing</h1><p>In this blog post we will dive in to consistent hashing and implement it in go. Lets start with a problem that consistent hashing would help solve. Imagine we have a distributed systems with 3 database. Business is booming and we realize we need to scale out to more shards. Lets assume we selected which node to send the data to using a hash function f(x) and get the node:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span>node <span style=color:#f92672>=</span> hash(id)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span></code></pre></div><p>The downside with this is that if we like to add a node, almost all data points would move hash:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;hello&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;car&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;now&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>0</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;sound&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;snow&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>0</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;apple&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>3</span>
+</span></span></code></pre></div><p>vs</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;hello&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>0</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;car&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;now&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>2</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;sound&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>3</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;snow&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span><span style=color:#ae81ff>1</span> <span style=color:#f92672>=</span> hash(<span style=color:#e6db74>&#34;apple&#34;</span>)<span style=color:#f92672>%</span><span style=color:#ae81ff>4</span>
+</span></span></code></pre></div><p>As we can se in this case we would move 5 out of 6 values. We would like to shuffle as little data around as possible(of course we want to move some values to the new node). This is where Consistent Hashing comes in. Lets assume we have a hashing function that hash to values in the range of 0 -> 400, normally we would of course have a hashing function with a larger range.</p><p>We would set our nodes to handle a range and naturally with three nodes we would set:</p><p>node 1: 0-> 133
+node 2: 133-> 266
+node 3: 266 -> 400</p><p>If we decide to add a node we would then split the range between one of these nodes and thus end up with something like:</p><p>node 1: 0-> 88
+node `1: 88-> 133
+node 2: 133-> 266
+node 3: 266 -> 400</p><p>Now we just rearrange a small part of the values. However we only broke up one range. In order to solve this we introduce the concept of virtual nodes. Instead of mapping each nodes to a specific range we split the range (0->400) in to multiple smaller sections where N> number of nodes. Something like:</p><pre tabindex=0><code>node a 0-&gt; 50
+node b 50-&gt; 100
+node c 150-&gt; 200
+node d 200-&gt; 250
+node e 250-&gt; 300
+node f 300 -&gt; 350
+node f 350-&gt; 400
+</code></pre><p>we would then map this to the actual nodes:</p><pre tabindex=0><code>node 1: 0 -&gt; 50 &amp; 200-&gt;250 &amp; 350 -&gt; 400
+node 2: 50 -&gt; 100 &amp; 250-&gt;300
+node 3: 150 -&gt; 200 &amp; 300 -&gt; 350
+</code></pre><p>We could add any number of virtual nodes to split the data up. If we now add a new node:</p><pre tabindex=0><code>node 1: 0 -&gt; 50 
+node 2: 50 -&gt; 100 &amp; 250-&gt;300
+node 3: 150 -&gt; 200 &amp; 300 -&gt; 350
+node 4: 200-&gt;250 &amp; 350 -&gt; 400
+</code></pre><p>In this case we can avoid hot key ranges better and also add new node while minimizing the number of values that are shuffled.</p><p><img src=../../../../img/ring.png alt="Consistent hashing"></p><h1 id=consistent-hashing-implementation>Consistent Hashing Implementation</h1><p>We will walk over how to implement this first and then do a <code>go</code> implementation.</p><p>The first step is to find the actual node of interest for a specific key, this can be done with a Binary Search Tree(BST) or a sorted list where we iterate over and find the key.</p><pre tabindex=0><code class=language-mermaid data-lang=mermaid>graph TB
+    A((200))--&gt;B((50))
+    A--&gt;C((300))
+    B--&gt;D((0))
+    B--&gt;E((101))
+    C--&gt;F((201))
+    C--&gt;G((301))
+</code></pre><p>Using a BST the time complexity is log(n) where n is the time it takes to find which nodes have the value of interest. The brute force solution would be to check all the nodes and see which ranges they have. With few nodes that would be very fast and we don&rsquo;t need to have a binary search tree.</p><p>When adding nodes we will add a number virtual nodes in order to get a better balance between the nodes and avoid hot nodes. We will focus on an implementation where we use a sorted list and thus each time we add a new node(and multiple virtual nodes) we have to update the sorted list of nodes.</p><p>When we want to find which nodes holds our value we do the following:</p><ol><li>hash the value</li><li>take the modulus(based upon the number of virtual nodes) as key</li><li>loop over the virtual nodes and check the start value of each of them, if the start value is larger than our key, take the previous node.</li></ol><p>And we are done.</p><h1 id=consistent-hashing-1>Consistent hashing</h1><p>To start of we use a sorted list of the nodes instead of a binary tree, this will be slightly less performance:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#f92672>package</span> <span style=color:#a6e22e>ring</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> (
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;fmt&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;hash&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;hash/fnv&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;sort&#34;</span>
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// Way to slow and uninspiring
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// Time to implement consistent hashing instead
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// This is my ring :)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>virtualNode</span> <span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>node</span> <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// We should be able to call the node as well here ...
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>start</span> <span style=color:#66d9ef>uint32</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Ring</span> <span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>nodes</span> []<span style=color:#a6e22e>virtualNode</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>hash</span>  <span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Hash32</span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// Mapping from virtual node to the actual node
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// This is needed when we delete a node
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>NodeMapping</span> <span style=color:#66d9ef>map</span>[<span style=color:#66d9ef>string</span>][]<span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>New</span>() <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>Ring</span>{
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>nodes</span>:       []<span style=color:#a6e22e>virtualNode</span>{},
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>hash</span>:        <span style=color:#a6e22e>fnv</span>.<span style=color:#a6e22e>New32</span>(),
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>NodeMapping</span>: <span style=color:#66d9ef>map</span>[<span style=color:#66d9ef>string</span>][]<span style=color:#66d9ef>string</span>{},
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>Len</span>() <span style=color:#66d9ef>int</span>           { <span style=color:#66d9ef>return</span> len(<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>) }
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>Swap</span>(<span style=color:#a6e22e>i</span>, <span style=color:#a6e22e>j</span> <span style=color:#66d9ef>int</span>)      { <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>i</span>], <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>j</span>] = <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>j</span>], <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>i</span>] }
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>Less</span>(<span style=color:#a6e22e>i</span>, <span style=color:#a6e22e>j</span> <span style=color:#66d9ef>int</span>) <span style=color:#66d9ef>bool</span> { <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>i</span>].<span style=color:#a6e22e>start</span> &lt; <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>j</span>].<span style=color:#a6e22e>start</span> }
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// Add adds a new node -&gt; number of virtual nodes to the ring
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>Add</span>(<span style=color:#a6e22e>node</span> <span style=color:#66d9ef>string</span>, <span style=color:#a6e22e>nbrVirtualNode</span> <span style=color:#66d9ef>int</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>nbrVirtualNode</span> &lt; <span style=color:#ae81ff>1</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Errorf</span>(<span style=color:#e6db74>&#34;nbrVirtualNode needs to be larger than  0, currently %v&#34;</span>, <span style=color:#a6e22e>nbrVirtualNode</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>:=</span> <span style=color:#ae81ff>0</span>; <span style=color:#a6e22e>i</span> &lt; <span style=color:#a6e22e>nbrVirtualNode</span>; <span style=color:#a6e22e>i</span><span style=color:#f92672>++</span> {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// Never assume the buffer is clean, be defensive
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Reset</span>()
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Write</span>([]byte(<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Sprintf</span>(<span style=color:#e6db74>&#34;%s_%v&#34;</span><span style=color:#a6e22e>node</span>,<span style=color:#a6e22e>i</span>)))
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Errorf</span>(<span style=color:#e6db74>&#34;write hash: %v&#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span> = append(<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>, <span style=color:#a6e22e>virtualNode</span>{
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>node</span>:  <span style=color:#a6e22e>node</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>start</span>: <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Sum32</span>(),
+</span></span><span style=display:flex><span>		})
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>sort</span>.<span style=color:#a6e22e>Sort</span>(<span style=color:#a6e22e>r</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// GetNode gets the node
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>GetNode</span>(<span style=color:#a6e22e>key</span> <span style=color:#66d9ef>string</span>) (<span style=color:#66d9ef>string</span>, <span style=color:#66d9ef>error</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// Never assume the buffer is clean, be defensive
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Reset</span>()
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Write</span>([]byte(<span style=color:#a6e22e>key</span>))
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;&#34;</span>, <span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Errorf</span>(<span style=color:#e6db74>&#34;write hash: %v&#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>hash</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>hash</span>.<span style=color:#a6e22e>Sum32</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// TODO: continue here to fix the issues with the tests
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// We want to use all virtual nodes ...
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// set the first node to 0?
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// The last node will not be used currently
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// We need to make it circular
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>idx</span>, <span style=color:#a6e22e>node</span> <span style=color:#f92672>:=</span> <span style=color:#66d9ef>range</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>idx</span> <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[len(<span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>)<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>].<span style=color:#a6e22e>node</span>, <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>node</span>.<span style=color:#a6e22e>start</span> &gt; <span style=color:#a6e22e>hash</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#a6e22e>idx</span><span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>].<span style=color:#a6e22e>node</span>, <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>r</span>.<span style=color:#a6e22e>nodes</span>[<span style=color:#ae81ff>0</span>].<span style=color:#a6e22e>node</span>, <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// RemoveNodes removes the actual node
+</span></span></span><span style=display:flex><span><span style=color:#75715e>// Data will not be moved, we just drop the nodes
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>func</span> (<span style=color:#a6e22e>r</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>Ring</span>) <span style=color:#a6e22e>RemoveNode</span>(<span style=color:#a6e22e>node</span> <span style=color:#66d9ef>string</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><h1 id=next-steps>Next steps</h1><p>In a later blog post we will implement a distributed Key value store and use our Consistent Hashing function to distribute the keys.</p><h1 id=more-reading>More reading</h1><p>Random sources I found useful:</p><ul><li><a href="http://highscalability.com/blog/2023/2/22/consistent-hashing-algorithm.html#:~:text=Consistent%20hashing%20is%20a%20distributed,of%20nodes%20changes%20%5B4%5D.">Blog post</a></li><li><a href=https://github.com/gholt/ring/blob/master/BASIC_HASH_RING.md>Gist</a></li></ul></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2024 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
