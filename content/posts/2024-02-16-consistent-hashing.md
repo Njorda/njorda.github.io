@@ -117,7 +117,7 @@ When we want to find which nodes holds our value we do the following:
 And we are done. 
 
 
-# Consistent hashing, distributed key value store.  
+# Consistent hashing
 
 To start of we use a sorted list of the nodes instead of a binary tree, this will be slightly less performance: 
 
