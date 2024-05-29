@@ -1,0 +1,6 @@
+brews:
+- name: shareit
+  homepage: https://github.com/Njorda/homebrew-tools/src/shareit
+  tap:
+    owner: nikenano
+    name: homebrew-tools
