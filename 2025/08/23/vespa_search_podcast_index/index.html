@@ -1,0 +1,578 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Vespa(Search engine): podcast index - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="After playing around with the Podcast index and the amazing SQLite dump, I got stuck and annoyed that the search experience using SQLite and FTS5 is not that nice. I never found a good way to do a fuzzy search for podcasts. After being stuck, I decided that I want to use Vespa instead, which I had played around with before and liked.
+I will not go over Vespa but instead focus on how to:"><meta property="og:image" content><meta property="og:title" content="Vespa(Search engine): podcast index"><meta property="og:description" content="After playing around with the Podcast index and the amazing SQLite dump, I got stuck and annoyed that the search experience using SQLite and FTS5 is not that nice. I never found a good way to do a fuzzy search for podcasts. After being stuck, I decided that I want to use Vespa instead, which I had played around with before and liked.
+I will not go over Vespa but instead focus on how to:"><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2025/08/23/vespa_search_podcast_index/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2025-08-23T00:00:00+00:00"><meta property="article:modified_time" content="2025-08-23T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Vespa(Search engine): podcast index"><meta name=twitter:description content="After playing around with the Podcast index and the amazing SQLite dump, I got stuck and annoyed that the search experience using SQLite and FTS5 is not that nice. I never found a good way to do a fuzzy search for podcasts. After being stuck, I decided that I want to use Vespa instead, which I had played around with before and liked.
+I will not go over Vespa but instead focus on how to:"><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>Vespa(Search engine): podcast index</h1><div class=meta>Posted on Aug 23, 2025</div></div><section class=body><p>After playing around with the <a href="https://podcastindex.org/apps?appTypes=app">Podcast index</a> and the amazing <a href=https://github.com/Podcastindex-org/database>SQLite dump</a>, I got stuck and annoyed that the search experience using SQLite and <a href=https://www.sqlite.org/fts5.html>FTS5</a> is not that nice. I never found a good way to do a fuzzy search for podcasts. After being stuck, I decided that I want to use Vespa instead, which I had played around with before and liked.</p><p>I will not go over Vespa but instead focus on how to:</p><ul><li>move a SQLite dump to Vespa</li><li>set up the Vespa schemas</li><li>set up the Vespa rankings( we will focuse further on this in follow up posts)</li></ul><h1 id=set-up-vespa>Set up Vespa</h1><p>So first, the schema of the SQLite db is as follows; there is only one table called podcast:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=display:flex><span><span style=color:#f92672>//</span> <span style=color:#66d9ef>CREATE</span> <span style=color:#66d9ef>TABLE</span> podcasts (
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     id INTEGER <span style=color:#66d9ef>PRIMARY</span> <span style=color:#66d9ef>KEY</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     url TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span> <span style=color:#66d9ef>UNIQUE</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     title TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     lastUpdate INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     link TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     lastHttpStatus INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     dead INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     contentType TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     itunesId INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     originalUrl TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     itunesAuthor TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     itunesOwnerName TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     explicit INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     imageUrl TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     itunesType TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     generator TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     newestItemPubdate INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     <span style=color:#66d9ef>language</span> TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     oldestItemPubdate INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     episodeCount INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     popularityScore INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     priority INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     createdOn INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     updateFrequency INTEGER,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     chash TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     <span style=color:#66d9ef>host</span> TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     newestEnclosureUrl TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     podcastGuid TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     description TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category1 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category2 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category3 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category4 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category5 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category6 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category7 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category8 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category9 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     category10 TEXT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span>,
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span>     newestEnclosureDuration INTEGER
+</span></span><span style=display:flex><span><span style=color:#f92672>//</span> );
+</span></span></code></pre></div><p>To load it up after downloading it from <a href=https://github.com/Podcastindex-org/database#database>here</a>, open it up using:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>sqlite3 --readonly podcastindex.db
+</span></span><span style=display:flex><span>.schema
+</span></span></code></pre></div><p>I will use Go (just because I like it) for this, but it should be easy to ask your favorite LLM to translate it to any programming language.</p><p>Vespa uses a typed schema definition. If you feel we&rsquo;re glossing over the basics of Vespa, that is indeed the case. Vespa has <a href=https://docs.vespa.ai>good documentation</a>, even though it is sometimes hard to find the right content. What we will focus on though is how we construct our search, how we set up <a href=https://docs.vespa.ai/en/schemas.html>our schema</a>, and so on.</p><p>I will not take all the fields in the SQLite db schema but just the ones I care about and intend to keep, in order to reduce size and simplify things as much as possible.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>id INTEGER PRIMARY KEY,
+</span></span><span style=display:flex><span>//     url TEXT NOT NULL UNIQUE,
+</span></span><span style=display:flex><span>//     title TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     lastUpdate INTEGER,
+</span></span><span style=display:flex><span>//     link TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     lastHttpStatus INTEGER,
+</span></span><span style=display:flex><span>//     dead INTEGER,
+</span></span><span style=display:flex><span>//     contentType TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     itunesId INTEGER,
+</span></span><span style=display:flex><span>//     originalUrl TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     itunesAuthor TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     itunesOwnerName TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     explicit INTEGER,
+</span></span><span style=display:flex><span>//     imageUrl TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     itunesType TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     generator TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     newestItemPubdate INTEGER,
+</span></span><span style=display:flex><span>//     language TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     oldestItemPubdate INTEGER,
+</span></span><span style=display:flex><span>//     episodeCount INTEGER,
+</span></span><span style=display:flex><span>//     popularityScore INTEGER,
+</span></span><span style=display:flex><span>//     priority INTEGER,
+</span></span><span style=display:flex><span>//     createdOn INTEGER,
+</span></span><span style=display:flex><span>//     updateFrequency INTEGER,
+</span></span><span style=display:flex><span>//     chash TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     host TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     newestEnclosureUrl TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     podcastGuid TEXT NOT NULL,
+</span></span><span style=display:flex><span>//     description TEXT NOT NULL,
+</span></span></code></pre></div><p>Based upon the fields in the SQLite db, this is the initial schema we kick it off with:</p><pre tabindex=0><code>schema podcast {
+    document podcast {
+
+
+        # Since this is the id I want to have it in memory and thus use attribute, also make it available 
+        # for operations such as sort filtering and ranking.
+        # I want it indexed and thus I also set index
+        # Since it is an ID I want exact matching, I make the exact terminator
+        # explicit but the default is actually the same.
+        # Attribute link: https://docs.vespa.ai/en/attributes.html
+        field id type string {
+            indexing: attribute | summary 
+            match {
+                exact
+                exact-terminator: &#34;@@&#34;
+            }
+        }
+  
+        field url type string {
+            indexing: summary 
+        }
+
+        field title type string {
+            indexing: attribute | summary | index
+            match: text
+        }
+
+        field last_update type long {
+            indexing: summary
+        }
+
+        field link type string {
+            indexing: summary
+        }
+
+        field last_http_status type int {}
+        field dead type bool {
+            indexing: attribute
+            rank: filter
+        }
+        field content_type type string {}
+        field original_url type string {}
+        field itunes_author type string {}
+        field itunes_owner_name type string {}
+        field explicit type bool {}
+
+        field image_url type string {
+            indexing: summary
+        }
+
+        field itunes_type type string {}
+        field generator type string {}
+        field newest_item_pubdate type long {
+            indexing: attribute
+            attribute: fast-search
+        }
+        field language type string {}
+        field oldest_item_pubdate type long {}
+        field episode_count type int {}
+        field popularity_score type double {
+            indexing: summary | attribute 
+        }
+        field priority type int {}
+        field created_on type long {}
+        field update_frequency type int {}
+        field chash type string {}
+        field podcast_host type string {}
+        field newest_enclosure_url type string {}
+        field podcast_guid type string {}
+
+        field description type string {
+            indexing: summary | attribute | index
+            attribute: fast-search
+            match: text
+        }
+    }
+
+    # Vespa seems to first do a filter on the fields that we rank on
+    # we can not have the filtering without the ranking it seems like? 
+    fieldset prefix {
+        fields: title_array, title_prefix
+    }
+
+    field title_prefix type string {
+        indexing: input title | attribute | summary
+    }
+
+    # This will be used for prefix search in on the podcast name 
+    # https://docs.vespa.ai/en/text-matching.html#prefix-match
+    field title_array type array&lt;string&gt; {
+        indexing: input title | trim | split &#34; +&#34; | attribute | summary
+        stemming: best
+        attribute: fast-search
+    }
+
+    # Document Summaries are memory-only operations if all fields are attributes.
+    document-summary minimal {
+        summary title {}
+        summary description {}
+        summary newest_item_pubdate {}
+        summary url {}
+        summary popularity_score {}
+    }
+
+
+    # The match phase is dont on the content nodes, we rank the content based upon recency. 
+    rank-profile podcast-search {
+
+        inputs {
+            query(q) string
+        }
+
+        function freshness() {
+            expression: exp(-1 * age(newest_item_pubdate)/(3600*24*7)) + attribute(popularity_score)/9
+        }
+
+        # https://docs.vespa.ai/en/reference/schema-reference.html#match-phase
+        # Attribute that decides which documents are a match if the match
+        # phase estimates that there will be more than max-hits hits.
+        match-phase {
+            attribute: newest_item_pubdate
+            order: descending
+            max-hits: 1000
+        }
+
+        # https://docs.vespa.ai/en/tutorials/hybrid-search.html
+        # Add time factor for aging content
+        # https://docs.vespa.ai/en/nativerank.html#putting-our-features-together-into-a-ranking-expression
+        # Figure out how to use the chunks in the first phase
+        # https://pyvespa.readthedocs.io/en/latest/examples/multilingual-multi-vector-reps-with-cohere-cloud.html
+        first-phase {
+            expression: bm25(title) + bm25(description) * 0.2 + freshness()
+        }
+
+        match-features {
+            bm25(title)
+            bm25(description)
+            freshness()
+            query(q)
+        }  
+    }
+}
+</code></pre><p>The schema contains some inline comments, but let&rsquo;s go over it a bit more. See the Vespa <a href=https://docs.vespa.ai/en/reference/schema-reference.html>Schema reference</a>. We only selected a subset of the fields. My first impression when using Vespa is that it is more low-level than for example Postgres in the way the schemas are set up. It is also important to notice that Vespa is not a relational database or a document store but a search engine, and most of the internals are focused around search.</p><p>The first field we define is the ID, which we keep as a string. Important to notice is that we explicitly set the matching condition to exact since we don&rsquo;t want to do search over the IDs (but actual matches). We also set the field to summary and attribute. This was one of the most unclear things in the schema definition for me, but the best explanation can be found <a href=https://docs.vespa.ai/en/schemas.html#indexing>here</a> in the table below. Further reading can also be found <a href=https://docs.vespa.ai/en/reference/schema-reference.html#indexing>here</a>:</p><blockquote><table><thead><tr><th>EXPRESSION</th><th>DESCRIPTION</th></tr></thead><tbody><tr><td>attribute</td><td>For structured data: Keep this field in memory in a forward structure. This makes the field available for grouping, sorting and ranking. Attributes may also be searched by complete match (word or exact), or (for numerical fields) by range. Optionally a B-tree in memory can also be created by adding the fast-search option - this improves performance if the attribute is a strong criterion in queries (i.e. filters out many documents). Reference / attribute details</td></tr><tr><td>index</td><td>For unstructured text: Create a text index for this field. Text matching and all text ranking features become available. Indexes are disk backed and do not need to fit in memory. Reference / index details</td></tr><tr><td>summary</td><td>Include this field in the document summary in search result sets. Reference / document summary details</td></tr></tbody></table></blockquote><p>The difference can also be expressed as:</p><ul><li>attribute indexing is used for database-style string matching <strong>without linguistic processing and where the exact string contents are matched</li><li>index indexing is used with linguistic processing such as tokenization and stemming.</li></ul><p>So if you want to use BM25 and similar ranking functions for a field, you will need to add index. This is not of interest for the ID field where we have structured SQL-like queries only.</p><p>We set up the id field as follows:</p><pre tabindex=0><code>    field id type string {
+        indexing: attribute | summary
+        match {
+            exact
+            exact-terminator: &#34;@@&#34;
+        }
+    }
+</code></pre><p>Since we want to filter on it, we keep it as an attribute (an attribute field will be in memory at all times) and have it as a summary field in order to return it.</p><p>We than make a small optimization but one that potentially could reduce the CPU load a lot and set the <a href=https://docs.vespa.ai/en/reference/schema-reference.html#rank><code>rank: filter</code></a>:</p><pre tabindex=0><code>    field dead type bool {
+        indexing: attribute
+        rank: filter
+    }
+</code></pre><p>This creates a bitvector field that can be used for searching. If other indexes would be available, the query planner would select the best one in order to optimize the query performance.</p><p>The next interesting part is the <code>title_array</code>,where we create a <a href=https://docs.vespa.ai/en/reference/indexing-language-reference.html>synthetic field</a>:</p><pre tabindex=0><code>    field title_array type array&lt;string&gt; {
+        indexing: input title | trim | split &#34; +&#34; | attribute | summary
+        stemming: best
+        attribute: fast-search
+    }
+</code></pre><p>We take the column <code>title</code>, trim it, then split it. This is done in order to do prefix search on individual terms in the title. I will later show how we do this and also handle spelling errors. The field is not set as an index field, due to the fact that regular index fields do <a href=https://docs.vespa.ai/en/text-matching.html>not support prefix matching</a>. By default, for attribute fields no index is added. By adding <code>attribute: fast-search</code>, a B-tree-like structured index is added to the attribute which <a href=https://docs.vespa.ai/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields>can significantly speed up search</a>.</p><p>In order to also allow for matching against a title with multiple words, the title array will only work for each word individually and we cannot use the title field since it is both an attribute and an index field. We create a synthetic field from the <code>title</code> field called <code>title_prefix</code>:</p><pre tabindex=0><code>field title_prefix type string {
+    indexing: input title | attribute | summary
+}
+</code></pre><p>We then create a <a href=https://docs.vespa.ai/en/document-summaries.html><code>document summary</code></a>:</p><pre tabindex=0><code>    document-summary minimal {
+        summary title {}
+        summary description {}
+        summary newest_item_pubdate {}
+        summary url {}
+        summary popularity_score {}
+    }
+</code></pre><p>This is used as a grouping for the returned fields, the summary, and is a logical grouping of fields we like to get out. Since this is a search engine, there is a distinction between fields used internally and exposed externally.</p><blockquote><p>Key to understanding Vespa is to understand what it is not: a relational database, but rather a search engine.</p></blockquote><p>Next up is probably the most interesting thing, which is the ranking functions. Before we look at the ranking function we build, let&rsquo;s spend some time looking at search as a ranking problem and how we break it down into different phases. We will do this through the lens of Vespa, but the concepts hold outside. In general, it is a pipeline with less and less data but potentially more compute spent per sample in each step in order to get a better ranking.</p><ol><li>Matching based upon the incoming filter requirements, such as IDs or Language. These are strict requirements that need to be fulfilled.</li><li>First reranking - this is done on the content nodes (<a href=https://docs.vespa.ai/en/content/content-nodes.html>more about Vespa setup</a> can be found here. But in short, we have stateful content nodes storing the data and stateless compute nodes).</li><li>Second reranking (also done on the content nodes).</li><li>Global reranking, combining the tuples from all content nodes.</li></ol><p><a href=https://docs.vespa.ai/en/phased-ranking.html>This is a good resource</a> to read more about it. All the options for the rank-profile can be found <a href=https://docs.vespa.ai/en/reference/schema-reference.html#rank-profile>here</a>.</p><pre tabindex=0><code>rank-profile podcast-search {
+
+    inputs {
+        query(q) string
+    }
+
+    function freshness() {
+        expression: exp(-1 * age(newest_item_pubdate)/(3600*24*7)) + attribute(popularity_score)/9
+    }
+
+    # https://docs.vespa.ai/en/reference/schema-reference.html#match-phase
+    # Attribute that decides which documents are a match if the match 
+    # phase estimates that there will be more than max-hits hits.
+    match-phase {
+        attribute: newest_item_pubdate
+        order: descending
+        max-hits: 1000
+    }
+
+    # https://docs.vespa.ai/en/tutorials/hybrid-search.html
+    # Add time factor for aging content 
+    # https://docs.vespa.ai/en/nativerank.html#putting-our-features-together-into-a-ranking-expression
+    # figure out how to use the chunks in the first phase
+    # https://pyvespa.readthedocs.io/en/latest/examples/multilingual-multi-vector-reps-with-cohere-cloud.html
+    first-phase {
+        expression: bm25(title) + bm25(description) * 0.2 + freshness()
+    }
+
+    match-features {
+        bm25(title)
+        bm25(description)
+        freshness()
+        query(q)
+    }  
+}
+</code></pre><p>We will dive more in to the ranking in a follow up post.</p><p>To get vespa setup and running we will use docker:</p><pre tabindex=0><code>docker run --detach --name vespa-podcast --hostname vespa-podcast \
+  --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:19112:19112 --publish 127.0.0.1:19071:19071 \
+  vespaengine/vespa
+</code></pre><p>We assume the following folder structure:</p><p>search/
+├── schemas/
+│ ├── podcast.sd
+└── services.xml</p><p>Where the service.xml file looks like the following (use it as an example for recreating this blog post):</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-xml data-lang=xml><span style=display:flex><span><span style=color:#75715e>&lt;?xml version=&#39;1.0&#39; encoding=&#39;UTF-8&#39;?&gt;</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>&lt;services</span> <span style=color:#a6e22e>version=</span><span style=color:#e6db74>&#34;1.0&#34;</span> <span style=color:#a6e22e>xmlns:deploy=</span><span style=color:#e6db74>&#34;vespa&#34;</span> <span style=color:#a6e22e>xmlns:preprocess=</span><span style=color:#e6db74>&#34;properties&#34;</span><span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>&lt;container</span> <span style=color:#a6e22e>id=</span><span style=color:#e6db74>&#34;search&#34;</span> <span style=color:#a6e22e>version=</span><span style=color:#e6db74>&#34;1.0&#34;</span><span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;document-api/&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;search&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;/search&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;document-processing/&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;nodes&gt;</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>&lt;node</span> <span style=color:#a6e22e>hostalias=</span><span style=color:#e6db74>&#34;node1&#34;</span> <span style=color:#f92672>/&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;/nodes&gt;</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>&lt;/container&gt;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>&lt;content</span> <span style=color:#a6e22e>id=</span><span style=color:#e6db74>&#34;podcast&#34;</span> <span style=color:#a6e22e>version=</span><span style=color:#e6db74>&#34;1.0&#34;</span><span style=color:#f92672>&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;min-redundancy&gt;</span>2<span style=color:#f92672>&lt;/min-redundancy&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;documents&gt;</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>&lt;document</span> <span style=color:#a6e22e>type=</span><span style=color:#e6db74>&#39;podcast&#39;</span> <span style=color:#a6e22e>mode=</span><span style=color:#e6db74>&#34;index&#34;</span><span style=color:#f92672>/&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;/documents&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;nodes&gt;</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>&lt;node</span> <span style=color:#a6e22e>distribution-key=</span><span style=color:#e6db74>&#39;0&#39;</span> <span style=color:#a6e22e>hostalias=</span><span style=color:#e6db74>&#39;node1&#39;</span><span style=color:#f92672>/&gt;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>&lt;/nodes&gt;</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>&lt;/content&gt;</span>
+</span></span><span style=display:flex><span>  
+</span></span><span style=display:flex><span><span style=color:#f92672>&lt;/services&gt;</span>
+</span></span></code></pre></div><p>You can then use the <a href=https://docs.vespa.ai/en/vespa-cli.html#install-configure-and-run>Vespa CLI</a> from the search folder:</p><pre tabindex=0><code>vespa deploy
+</code></pre><h1 id=dump-the-sqlite-database-data>Dump the SQLite database data</h1><p>Feel free to dump the SQLite db any way you want. Below is a small Go script to do it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#f92672>package</span> <span style=color:#a6e22e>main</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> (
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;database/sql&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;encoding/json&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;fmt&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;log&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;os&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#e6db74>&#34;strconv&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>_</span> <span style=color:#e6db74>&#34;github.com/mattn/go-sqlite3&#34;</span>
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>Podcast</span> <span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ID</span>                 <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;id&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>URL</span>                <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;url&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Title</span>              <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;title&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>LastUpdate</span>         <span style=color:#66d9ef>int64</span>   <span style=color:#e6db74>`json:&#34;last_update&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Link</span>               <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;link&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>LastHTTPStatus</span>     <span style=color:#66d9ef>int</span>     <span style=color:#e6db74>`json:&#34;last_http_status&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Dead</span>               <span style=color:#66d9ef>bool</span>    <span style=color:#e6db74>`json:&#34;dead&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ContentType</span>        <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;content_type&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>OriginalURL</span>        <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;original_url&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ITunesAuthor</span>       <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;itunes_author&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ITunesOwnerName</span>    <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;itunes_owner_name&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Explicit</span>           <span style=color:#66d9ef>bool</span>    <span style=color:#e6db74>`json:&#34;explicit&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ImageURL</span>           <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;image_url&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>ITunesType</span>         <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;itunes_type&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Generator</span>          <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;generator&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>NewestItemPubDate</span>  <span style=color:#66d9ef>int64</span>   <span style=color:#e6db74>`json:&#34;newest_item_pubdate&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Language</span>           <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;language&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>OldestItemPubDate</span>  <span style=color:#66d9ef>int64</span>   <span style=color:#e6db74>`json:&#34;oldest_item_pubdate&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>EpisodeCount</span>       <span style=color:#66d9ef>int</span>     <span style=color:#e6db74>`json:&#34;episode_count&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>PopularityScore</span>    <span style=color:#66d9ef>float64</span> <span style=color:#e6db74>`json:&#34;popularity_score&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Priority</span>           <span style=color:#66d9ef>int</span>     <span style=color:#e6db74>`json:&#34;priority&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>CreatedOn</span>          <span style=color:#66d9ef>int64</span>   <span style=color:#e6db74>`json:&#34;created_on&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>UpdateFrequency</span>    <span style=color:#66d9ef>int</span>     <span style=color:#e6db74>`json:&#34;update_frequency&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Chash</span>              <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;chash&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>PodcastHost</span>        <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;podcast_host&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>NewestEnclosureURL</span> <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;newest_enclosure_url&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>PodcastGUID</span>        <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;podcast_guid&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Description</span>        <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;description&#34;`</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>type</span> <span style=color:#a6e22e>VespaPut</span> <span style=color:#66d9ef>struct</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Put</span>    <span style=color:#66d9ef>string</span>  <span style=color:#e6db74>`json:&#34;put&#34;`</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>Fields</span> <span style=color:#a6e22e>Podcast</span> <span style=color:#e6db74>`json:&#34;fields&#34;`</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(len(<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>))
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> len(<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>) <span style=color:#f92672>!=</span> <span style=color:#ae81ff>4</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#e6db74>&#34; add 3 args, usage add path to db file and out put path&#34;</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>dbPath</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>1</span>]
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>outputPath</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>2</span>]
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>nbrOfPodcasts</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>strconv</span>.<span style=color:#a6e22e>Atoi</span>(<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>3</span>])
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#e6db74>&#34;strconv: &#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>db</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>sql</span>.<span style=color:#a6e22e>Open</span>(<span style=color:#e6db74>&#34;sqlite3&#34;</span>, <span style=color:#a6e22e>dbPath</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>db</span>.<span style=color:#a6e22e>Close</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>podcasts</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>fetchPodcasts</span>(<span style=color:#a6e22e>db</span>, <span style=color:#a6e22e>nbrOfPodcasts</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#e6db74>&#34;fetchPodcasts: &#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>file</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Create</span>(<span style=color:#a6e22e>outputPath</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#e6db74>&#34;create: &#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>file</span>.<span style=color:#a6e22e>Close</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>enc</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>json</span>.<span style=color:#a6e22e>NewEncoder</span>(<span style=color:#a6e22e>file</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>p</span> <span style=color:#f92672>:=</span> <span style=color:#66d9ef>range</span> <span style=color:#a6e22e>podcasts</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>putID</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Sprintf</span>(<span style=color:#e6db74>&#34;id:podcast:podcast::%s&#34;</span>, <span style=color:#a6e22e>p</span>.<span style=color:#a6e22e>ID</span>)
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>record</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>VespaPut</span>{<span style=color:#a6e22e>Put</span>: <span style=color:#a6e22e>putID</span>, <span style=color:#a6e22e>Fields</span>: <span style=color:#a6e22e>p</span>}
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>enc</span>.<span style=color:#a6e22e>Encode</span>(<span style=color:#a6e22e>record</span>); <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>log</span>.<span style=color:#a6e22e>Fatal</span>(<span style=color:#e6db74>&#34;encode: &#34;</span>, <span style=color:#a6e22e>err</span>)
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>fetchPodcasts</span>(<span style=color:#a6e22e>db</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>sql</span>.<span style=color:#a6e22e>DB</span>, <span style=color:#a6e22e>limit</span> <span style=color:#66d9ef>int</span>) ([]<span style=color:#a6e22e>Podcast</span>, <span style=color:#66d9ef>error</span>) {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>rows</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>db</span>.<span style=color:#a6e22e>Query</span>(<span style=color:#e6db74>`
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>		SELECT
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			id,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			url,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			title,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			lastUpdate,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			link,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			lastHttpStatus,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			dead,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			contentType,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			originalUrl,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			itunesAuthor,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			itunesOwnerName,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			explicit,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			imageUrl,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			itunesType,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			generator,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			newestItemPubdate,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			language,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			oldestItemPubdate,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			episodeCount,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			popularityScore,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			priority,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			createdOn,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			updateFrequency,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			chash,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			host,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			newestEnclosureUrl,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			podcastGuid,
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>			description
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>		FROM podcasts
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>		ORDER BY id
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>		LIMIT ?;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>	`</span>, <span style=color:#a6e22e>limit</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>, <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>rows</span>.<span style=color:#a6e22e>Close</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>out</span> []<span style=color:#a6e22e>Podcast</span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>for</span> <span style=color:#a6e22e>rows</span>.<span style=color:#a6e22e>Next</span>() {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>var</span> (
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>idInt</span>              <span style=color:#66d9ef>int64</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>url</span>                <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>title</span>              <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>lastUpdate</span>         <span style=color:#66d9ef>int64</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>link</span>               <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>lastHTTPStatus</span>     <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>deadInt</span>            <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>contentType</span>        <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>originalURL</span>        <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>itunesAuthor</span>       <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>itunesOwnerName</span>    <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>explicitInt</span>        <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>imageURL</span>           <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>itunesType</span>         <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>generator</span>          <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>newestItemPubDate</span>  <span style=color:#66d9ef>int64</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>language</span>           <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>oldestItemPubDate</span>  <span style=color:#66d9ef>int64</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>episodeCount</span>       <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>popularityScoreInt</span> <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>priority</span>           <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>createdOn</span>          <span style=color:#66d9ef>int64</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>updateFrequency</span>    <span style=color:#66d9ef>int</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>chash</span>              <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>host</span>               <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>newestEnclosureURL</span> <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>podcastGUID</span>        <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>description</span>        <span style=color:#66d9ef>string</span>
+</span></span><span style=display:flex><span>		)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>rows</span>.<span style=color:#a6e22e>Scan</span>(
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>idInt</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>url</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>title</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>lastUpdate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>link</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>lastHTTPStatus</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>deadInt</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>contentType</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>originalURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>itunesAuthor</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>itunesOwnerName</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>explicitInt</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>imageURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>itunesType</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>generator</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>newestItemPubDate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>language</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>oldestItemPubDate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>episodeCount</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>popularityScoreInt</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>priority</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>createdOn</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>updateFrequency</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>chash</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>host</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>newestEnclosureURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>podcastGUID</span>,
+</span></span><span style=display:flex><span>			<span style=color:#f92672>&amp;</span><span style=color:#a6e22e>description</span>,
+</span></span><span style=display:flex><span>		); <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>, <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>out</span> = append(<span style=color:#a6e22e>out</span>, <span style=color:#a6e22e>Podcast</span>{
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ID</span>:                 <span style=color:#a6e22e>strconv</span>.<span style=color:#a6e22e>FormatInt</span>(<span style=color:#a6e22e>idInt</span>, <span style=color:#ae81ff>10</span>),
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>URL</span>:                <span style=color:#a6e22e>url</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Title</span>:              <span style=color:#a6e22e>title</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>LastUpdate</span>:         <span style=color:#a6e22e>lastUpdate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Link</span>:               <span style=color:#a6e22e>link</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>LastHTTPStatus</span>:     <span style=color:#a6e22e>lastHTTPStatus</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Dead</span>:               <span style=color:#a6e22e>deadInt</span> <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ContentType</span>:        <span style=color:#a6e22e>contentType</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>OriginalURL</span>:        <span style=color:#a6e22e>originalURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ITunesAuthor</span>:       <span style=color:#a6e22e>itunesAuthor</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ITunesOwnerName</span>:    <span style=color:#a6e22e>itunesOwnerName</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Explicit</span>:           <span style=color:#a6e22e>explicitInt</span> <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ImageURL</span>:           <span style=color:#a6e22e>imageURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>ITunesType</span>:         <span style=color:#a6e22e>itunesType</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Generator</span>:          <span style=color:#a6e22e>generator</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>NewestItemPubDate</span>:  <span style=color:#a6e22e>newestItemPubDate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Language</span>:           <span style=color:#a6e22e>language</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>OldestItemPubDate</span>:  <span style=color:#a6e22e>oldestItemPubDate</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>EpisodeCount</span>:       <span style=color:#a6e22e>episodeCount</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>PopularityScore</span>:    float64(<span style=color:#a6e22e>popularityScoreInt</span>),
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Priority</span>:           <span style=color:#a6e22e>priority</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>CreatedOn</span>:          <span style=color:#a6e22e>createdOn</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>UpdateFrequency</span>:    <span style=color:#a6e22e>updateFrequency</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Chash</span>:              <span style=color:#a6e22e>chash</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>PodcastHost</span>:        <span style=color:#a6e22e>host</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>NewestEnclosureURL</span>: <span style=color:#a6e22e>newestEnclosureURL</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>PodcastGUID</span>:        <span style=color:#a6e22e>podcastGUID</span>,
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>Description</span>:        <span style=color:#a6e22e>description</span>,
+</span></span><span style=display:flex><span>		})
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>rows</span>.<span style=color:#a6e22e>Err</span>(); <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>, <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>out</span>, <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>The script is slightly longer in order to remap the name of the fields (could also be done by renaming them in the query). Key things to notice:</p><ul><li>The output is JSONL</li><li>Each row has <code>{"put":"id:podcast:podcast::6","fields":{ .... }}</code> where fields is the actual data of value we care about. The put field contains the id, the schema and the document as part of it.</li></ul><p>To run it:</p><pre tabindex=0><code>go run . /Users/niklashansson/Documents/github/pod/backend/podcastindex_feeds.db dump.jsonl 1000000
+</code></pre><p>After this I end up with a file of <code>5.8GB</code></p><h1 id=ingest-the-data-into-vespa>Ingest the data into Vespa</h1><pre tabindex=0><code>vespa feed --dump.jsonl
+</code></pre><p>The ingest will take a little bit of time so let it run. I kind of felt it is slow but it might be due to the Docker setup and how the CLI ingests it, since it is roughly 4 million podcasts (only).</p><p>This returned:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>feed: got status <span style=color:#ae81ff>400</span> <span style=color:#f92672>({</span><span style=color:#e6db74>&#34;pathId&#34;</span>:<span style=color:#e6db74>&#34;/document/v1/podcast/podcast/docid/1825377&#34;</span>,<span style=color:#e6db74>&#34;message&#34;</span>:<span style=color:#e6db74>&#34;In document &#39;id:podcast:podcast::1825377&#39;: Could not parse field &#39;description&#39; of type string: The string field value contains illegal code point 0x3&#34;</span><span style=color:#f92672>})</span> <span style=color:#66d9ef>for</span> put id:podcast:podcast::1825377: not retryable
+</span></span><span style=display:flex><span>feed: got status <span style=color:#ae81ff>400</span> <span style=color:#f92672>({</span><span style=color:#e6db74>&#34;pathId&#34;</span>:<span style=color:#e6db74>&#34;/document/v1/podcast/podcast/docid/2783072&#34;</span>,<span style=color:#e6db74>&#34;message&#34;</span>:<span style=color:#e6db74>&#34;In document &#39;id:podcast:podcast::2783072&#39;: Could not parse field &#39;itunes_author&#39; of type string: The string field value contains illegal code point 0x3&#34;</span><span style=color:#f92672>})</span> <span style=color:#66d9ef>for</span> put id:podcast:podcast::2783072: not retryable
+</span></span><span style=display:flex><span>feed: got status <span style=color:#ae81ff>400</span> <span style=color:#f92672>({</span><span style=color:#e6db74>&#34;pathId&#34;</span>:<span style=color:#e6db74>&#34;/document/v1/podcast/podcast/docid/5535724&#34;</span>,<span style=color:#e6db74>&#34;message&#34;</span>:<span style=color:#e6db74>&#34;In document &#39;id:podcast:podcast::5535724&#39;: Could not parse field &#39;itunes_author&#39; of type string: The string field value contains illegal code point 0x3&#34;</span><span style=color:#f92672>})</span> <span style=color:#66d9ef>for</span> put id:podcast:podcast::5535724: not retryable
+</span></span><span style=display:flex><span>feed: got status <span style=color:#ae81ff>400</span> <span style=color:#f92672>({</span><span style=color:#e6db74>&#34;pathId&#34;</span>:<span style=color:#e6db74>&#34;/document/v1/podcast/podcast/docid/6420537&#34;</span>,<span style=color:#e6db74>&#34;message&#34;</span>:<span style=color:#e6db74>&#34;In document &#39;id:podcast:podcast::6420537&#39;: Could not parse field &#39;itunes_author&#39; of type string: The string field value contains illegal code point 0x8&#34;</span><span style=color:#f92672>})</span> <span style=color:#66d9ef>for</span> put id:podcast:podcast::6420537: not retryable
+</span></span><span style=display:flex><span><span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.operation.count&#34;</span>: 4625512,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.seconds&#34;</span>: 308.485,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.ok.count&#34;</span>: 4625508,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.ok.rate&#34;</span>: 14994.269,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.error.count&#34;</span>: 0,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;feeder.inflight.count&#34;</span>: 0,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.request.count&#34;</span>: 4625512,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.request.bytes&#34;</span>: 3448131187,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.request.MBps&#34;</span>: 11.178,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.exception.count&#34;</span>: 0,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.count&#34;</span>: 4625512,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.bytes&#34;</span>: 414304888,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.MBps&#34;</span>: 1.343,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.error.count&#34;</span>: 4,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.latency.millis.min&#34;</span>: 1,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.latency.millis.avg&#34;</span>: 34,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.latency.millis.max&#34;</span>: 191,
+</span></span><span style=display:flex><span>  <span style=color:#e6db74>&#34;http.response.code.counts&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;200&#34;</span>: 4625508,
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;400&#34;</span>: <span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>}</span>
+</span></span></code></pre></div><p>Indicating that we failed on 4 podcasts, this will not matter for this blog post so we will just skip ahead.</p><h1 id=query-our-vespa-search-engine>Query our Vespa search engine</h1><p>The easiest way to query Vespa is to use the <a href=https://docs.vespa.ai/en/vespa-cli.html#queries>Vespa CLI</a></p><p>Let&rsquo;s start by trying the prefix matching. We will use <a href=https://www.lennysnewsletter.com/podcast>Lenny&rsquo;s Podcast</a> as our example.</p><p>As a first example, we can try to match against words within the podcast name, thus <code>Lenny's</code> and <code>Podcast</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#e6db74>&#39;select title from podcast where title_array contains ({maxEditDistance: 4, prefix: true} &#34;Lenny&#39;</span><span style=color:#ae81ff>\&#39;</span><span style=color:#e6db74>&#39;s&#34;) and id contains &#34;1539262&#34;&#39;</span>
+</span></span></code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#e6db74>&#39;select title from podcast where title_array contains ({maxEditDistance: 4, prefix: true} &#34;Podcast&#34;) and id contains &#34;1539262&#34;&#39;</span>
+</span></span></code></pre></div><p>However, if we want to match against a prefix that contains both, it will not work to use the title_array field since we match against an array where we split it.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span> vespa query <span style=color:#e6db74>&#39;select title from podcast where title_array contains ({maxEditDistance: 4, prefix: true} &#34;Lenny&#39;</span><span style=color:#ae81ff>\&#39;</span><span style=color:#e6db74>&#39;s Podcast&#34;) and id contains &#34;1539262&#34;&#39;</span>
+</span></span></code></pre></div><p>A good learning here is that the field <code>title_array</code> will not help if the user has written <code>Lenny's Pod</code> since the title is split. Thus we want to actually match on both the split and the full ones in order to get the best possible hits (of course depending upon your use case, but for my case at least).</p><p>Instead we then need to do:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#e6db74>&#39;select title from podcast where prefix contains ({maxEditDistance: 4, prefix: true} &#34;Lenny&#39;</span><span style=color:#ae81ff>\&#39;</span><span style=color:#e6db74>&#39;s Podcast&#34;) and id contains &#34;1539262&#34;&#39;</span>
+</span></span></code></pre></div><p>This works since it uses the <code>fieldset</code> for the prefix search which is a grouping for both the <code>title_array</code> and the <code>title_prefix</code>.</p><p>That is all for this post. In a follow-up, we will dive deeper into the ranking function.</p></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2025 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
