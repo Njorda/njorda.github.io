@@ -1,17 +1,15 @@
 ---
 layout: post
-title: "Vespa Search Engine: Highlight search results"
-subtitle: "Dynamic bolding"
+title: "Vespa Search Engine: Match-phase"
+subtitle: "Query degradation and the downsides of match-phase"
 date: 2025-08-31
 author: "Niklas Hansson"
-URL: "/2025/08/30/vespa_highlights_bolding"
+URL: "/2025/08/31/vespa_match_phase"
 ---
 
-This blog post is a follow-up to the [previous post](/2025/08/23/vespa_podcast_ranking). But in this blog post we will focuse on how to make the result of search more clear to user why id matched and on what. This is called[Dynamic snippets](https://docs.vespa.ai/en/document-summaries.html#dynamic-snippets) it is an awesome feature that is not that well explained in the docs so here we go. 
+In this post we will debug a couple of queries to understand the performance and effects of Vespa’s match-phase. This is a follow-up to the [previous post](/2025/08/30/vespa_podcast_ranking). We assume you have the same setup if you want to run the queries yourself.
 
-If we use a previous query as an example: 
-
-
+If we use a previous query as an example:
 
 ```bash
 vespa query \
@@ -21,7 +19,7 @@ vespa query \
 'input.query(q)=100'
 ```
 
-However I realised one thing whild working on this: 
+While working on this, I realized something important:
 
 ```bash
 vespa query \
@@ -72,11 +70,10 @@ vespa query \
 }
 ```
 
-compare to: 
-
+Compare to:
 
 ```bash
- vespa query \
+vespa query \
 'yql=select title, description from podcast where title contains "Vespa voice" or description contains "RAG"' \
 'hits=1' \
 'ranking=podcast-search' \
@@ -118,13 +115,15 @@ compare to:
 }
 ```
 
-We get a very different result. The interesting parts are: 
+We get very different results. The interesting parts are:
 
-1) We get different results
-2) The first query gives a lot lower ranking score, why did not the correct one get chosen as in the second example. 
+- We only added a extra `contains "AI"`
+- Different top result.
+- The first query yields a much lower relevance score. Why didn’t the “correct” one win like in the second example?
 
+The culprit: match-phase and graceful degradation
 
-If we look futher we can set an important difference if we compare the coverage. When we add the contains AI term the search becomes [`degrade`](https://docs.vespa.ai/en/graceful-degradation.html#match-phase-degradation) due to the [match-phase](https://docs.vespa.ai/en/reference/schema-reference.html#match-phase): 
+If we compare the coverage, adding the `contains "AI"` term makes the search [degrade](https://docs.vespa.ai/en/graceful-degradation.html#match-phase-degradation) due to [match-phase](https://docs.vespa.ai/en/reference/schema-reference.html#match-phase):
 
 ```json
         "coverage": {
@@ -143,4 +142,32 @@ If we look futher we can set an important difference if we compare the coverage.
         },
 ```
 
-This is due to that the Vespa estimates about how many rows will be returned when we have a `match-phase` set in the schema and if more then the hit limit we will use the `match-phase` selection criteria to filter the results. In our case this is the difference between the querys, when we add that `or contains "AI"` the estimation is that we will hit a lot more and thus we start to filter based upon recency ranking. Since more data is small and static we will remove this criteria. Futher allways watch out for the degraded criteria. 
+What’s happening:
+
+- Adding the broad term `AI` inflates the estimated number of matches in such a way it triggers the match-pahase filtering.
+- Because the rank profile is configured with a `match-phase`, Vespa first selects a subset of candidate documents using the match-phase attribute (e.g., a recency/freshness signal) before full ranking.
+- Only that subset is then ranked with your relevance function (e.g., BM25 + other features). If the best document isn’t in the subset, it cannot win—leading to a lower score and a different top result.
+
+This explains both the degraded coverage and the unexpected document ordering.
+
+How to mitigate:
+
+- Tighten the query: Avoid very broad terms if they drastically expand the dataset. Prefer phrases or more specific terms, or separate exploratory queries from precise ones.
+- Tune match-phase (schema): Choose a match-phase attribute that correlates with final relevance for your use case; consider increasing `max-hits` or disabling match-phase for smaller/static corpora when latency allows. See the [schema reference](https://docs.vespa.ai/en/reference/schema-reference.html#match-phase).
+- Use diversity: [Match-phase diversity](https://docs.vespa.ai/en/result-diversity.html#match-phase-diversity) can spread the selected candidates across groups (e.g., by `publisher`, `series`, or another attribute) so a single cluster of similar content doesn’t dominate early selection.
+- Observe coverage: Always inspect `coverage.degraded.match-phase`. If true and coverage is low, you likely filtered too early.
+
+Example (rank-profile sketch):
+
+```text
+rank-profile podcast-search inherits default {
+  match-phase {
+    attribute: freshness   # attribute used to select early candidates
+    ascending: false       # newer first if freshness is “higher is newer”
+    max-hits: 10000        # tune based on corpus size / latency budget
+  }
+  # ...rest of ranking config...
+}
+```
+
+If your data is small and relatively static, it can be reasonable to remove or relax match-phase for this profile so the full candidate set is ranked. Otherwise, ensure the match-phase attribute and limits reflect what you actually want to bias early—then validate with `coverage` and result quality.
