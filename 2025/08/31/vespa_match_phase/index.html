@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Vespa Search Engine: Match-phase - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="In this post we will debug a couple of queries to understand the performance and effects of Vespa’s match-phase. This is a follow-up to the previous post. We assume you have the same setup if you want to run the queries yourself.
+If we use a previous query as an example:
+vespa query \ 'yql=select title, description from podcast where title contains &#34;Vespa AI Search&#34; or description contains &#34;Vespa AI search&#34;' \ 'hits=10' \ 'ranking=podcast-search' \ 'input."><meta property="og:image" content><meta property="og:title" content="Vespa Search Engine: Match-phase"><meta property="og:description" content="In this post we will debug a couple of queries to understand the performance and effects of Vespa’s match-phase. This is a follow-up to the previous post. We assume you have the same setup if you want to run the queries yourself.
+If we use a previous query as an example:
+vespa query \ 'yql=select title, description from podcast where title contains &#34;Vespa AI Search&#34; or description contains &#34;Vespa AI search&#34;' \ 'hits=10' \ 'ranking=podcast-search' \ 'input."><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2025/08/31/vespa_match_phase/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2025-08-31T00:00:00+00:00"><meta property="article:modified_time" content="2025-08-31T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Vespa Search Engine: Match-phase"><meta name=twitter:description content="In this post we will debug a couple of queries to understand the performance and effects of Vespa’s match-phase. This is a follow-up to the previous post. We assume you have the same setup if you want to run the queries yourself.
+If we use a previous query as an example:
+vespa query \ 'yql=select title, description from podcast where title contains &#34;Vespa AI Search&#34; or description contains &#34;Vespa AI search&#34;' \ 'hits=10' \ 'ranking=podcast-search' \ 'input."><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>Vespa Search Engine: Match-phase</h1><div class=meta>Posted on Aug 31, 2025</div></div><section class=body><p>In this post we will debug a couple of queries to understand the performance and effects of Vespa’s match-phase. This is a follow-up to the <a href=../../../../2025/08/30/vespa_podcast_ranking>previous post</a>. We assume you have the same setup if you want to run the queries yourself.</p><p>If we use a previous query as an example:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;yql=select title, description from podcast where title contains &#34;Vespa AI Search&#34; or description contains &#34;Vespa AI search&#34;&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;hits=10&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;ranking=podcast-search&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;input.query(q)=100&#39;</span>
+</span></span></code></pre></div><p>While working on this, I realized something important:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;yql=select title, description from podcast where title contains &#34;Vespa voice&#34; or description contains &#34;RAG&#34; or description contains &#34;AI&#34;&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;hits=1&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;ranking=podcast-search&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;input.query(q)=100&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;language=en&#39;</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;root&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;id&#34;</span>: <span style=color:#e6db74>&#34;toplevel&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;relevance&#34;</span>: 1.0,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;fields&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;totalCount&#34;</span>: <span style=color:#ae81ff>6119</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;coverage&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;coverage&#34;</span>: 7,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;documents&#34;</span>: 341462,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;degraded&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;match-phase&#34;</span>: true,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;timeout&#34;</span>: false,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;adaptive-timeout&#34;</span>: false,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;non-ideal-state&#34;</span>: false
+</span></span><span style=display:flex><span>            <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;full&#34;</span>: false,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;nodes&#34;</span>: 1,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;results&#34;</span>: 1,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;resultsFull&#34;</span>: <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;children&#34;</span>: <span style=color:#f92672>[</span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;id&#34;</span>: <span style=color:#e6db74>&#34;index:podcast/0/68a733e0528d46be938e9d86&#34;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;relevance&#34;</span>: 2.8612187560885154,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;source&#34;</span>: <span style=color:#e6db74>&#34;podcast&#34;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;fields&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;matchfeatures&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;bm25(description)&#34;</span>: 14.306093780442577,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;bm25(title)&#34;</span>: 0.0,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;query(q)&#34;</span>: 100.0,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;freshness&#34;</span>: 0.22501963346236087
+</span></span><span style=display:flex><span>                    <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;title&#34;</span>: <span style=color:#e6db74>&#34;Intelligence Artificielle - Data Driven 101 - Le podcast IA &amp; Data 100% en français&#34;</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;description&#34;</span>: <span style=color:#e6db74>&#34;Sur Data Driven 101, on s’intéresse aux applications pratiques de l&#39;Intelligence Artificielle et de la data dans toute leur diversité avec un objectif : démystifier ces concepts.Dans ce podcast IA &amp; Data (https://datadriven101.tech/) 100% en français, Marc Sanselme reçoit des professionnels de fonctions et d’horizons variés pour nous parler de leurs aventures, leurs succès, leurs échecs, leurs espoirs, leurs techniques, leurs astuces, leurs histoires et leurs convictions.De la Business Intelligence à la Generative AI (LLM, RAG, Agents...) ou à la Computer Vision, toutes les thématiques liées à l&#39;IA sont décortiquées épisode après épisode par Marc Sanselme et ses invités issus de la French tech et d&#39;ailleurs.Marc Sanselme est un spécialiste en Intelligence artificielle (https://scopeo.ai/marc-sanselme/) et dirige la société Draft&#39;n run, studio de développement no-code d&#39;IA sur mesure (https://draftnrun.com/).Équipe : Clémence Reliat, Jean-Christophe Corvisier, Marc SanselmeHébergé &#34;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>}</span>
+</span></span></code></pre></div><p>Compare to:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>vespa query <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;yql=select title, description from podcast where title contains &#34;Vespa voice&#34; or description contains &#34;RAG&#34;&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;hits=1&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;ranking=podcast-search&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;input.query(q)=100&#39;</span> <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span><span style=color:#e6db74>&#39;language=en&#39;</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;root&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;id&#34;</span>: <span style=color:#e6db74>&#34;toplevel&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;relevance&#34;</span>: 1.0,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;fields&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;totalCount&#34;</span>: <span style=color:#ae81ff>491</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;coverage&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;coverage&#34;</span>: 100,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;documents&#34;</span>: 4625508,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;full&#34;</span>: true,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;nodes&#34;</span>: 1,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;results&#34;</span>: 1,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#34;resultsFull&#34;</span>: <span style=color:#ae81ff>1</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;children&#34;</span>: <span style=color:#f92672>[</span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;id&#34;</span>: <span style=color:#e6db74>&#34;index:podcast/0/465a493ab2d24bcd8222dfd6&#34;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;relevance&#34;</span>: 23.0577889391953,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;source&#34;</span>: <span style=color:#e6db74>&#34;podcast&#34;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#34;fields&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;matchfeatures&#34;</span>: <span style=color:#f92672>{</span>
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;bm25(description)&#34;</span>: 9.149635037339992,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;bm25(title)&#34;</span>: 21.227861931727304,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;query(q)&#34;</span>: 100.0,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#34;freshness&#34;</span>: 7.821608121651948E-9
+</span></span><span style=display:flex><span>                    <span style=color:#f92672>}</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;title&#34;</span>: <span style=color:#e6db74>&#34;Vespa Voice&#34;</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#34;description&#34;</span>: <span style=color:#e6db74>&#34;Welcome to Vespa Voice, the podcast where AI leaders, search pioneers, and enterprise innovators converge. Each episode dives deep into the evolving landscape of AI, featuring candid conversations with experts shaping the future of agentic AI, search architecture, retrieval-augmented generation (RAG), and scalable enterprise applications. Whether you&#39;re a CTO driving digital transformation, a CIO reimagining data strategy, or an engineer building next-gen ML and search systems, this is your signal for what&#39;s next in intelligent infrastructure.&#34;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span>            <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>}</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>}</span>
+</span></span></code></pre></div><p>We get very different results. The interesting parts are:</p><ul><li>We only added a extra <code>contains "AI"</code></li><li>Different top result.</li><li>The first query yields a much lower relevance score. Why didn’t the “correct” one win like in the second example?</li></ul><p>The culprit: match-phase and graceful degradation</p><p>If we compare the coverage, adding the <code>contains "AI"</code> term makes the search <a href=https://docs.vespa.ai/en/graceful-degradation.html#match-phase-degradation>degrade</a> due to <a href=https://docs.vespa.ai/en/reference/schema-reference.html#match-phase>match-phase</a>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-json data-lang=json><span style=display:flex><span>        <span style=color:#e6db74>&#34;coverage&#34;</span><span style=color:#960050;background-color:#1e0010>:</span> {
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;coverage&#34;</span>: <span style=color:#ae81ff>7</span>,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;documents&#34;</span>: <span style=color:#ae81ff>341462</span>,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;degraded&#34;</span>: {
+</span></span><span style=display:flex><span>                <span style=color:#f92672>&#34;match-phase&#34;</span>: <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>                <span style=color:#f92672>&#34;timeout&#34;</span>: <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>                <span style=color:#f92672>&#34;adaptive-timeout&#34;</span>: <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>                <span style=color:#f92672>&#34;non-ideal-state&#34;</span>: <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span>            },
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;full&#34;</span>: <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;nodes&#34;</span>: <span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;results&#34;</span>: <span style=color:#ae81ff>1</span>,
+</span></span><span style=display:flex><span>            <span style=color:#f92672>&#34;resultsFull&#34;</span>: <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>        }<span style=color:#960050;background-color:#1e0010>,</span>
+</span></span></code></pre></div><p>What’s happening:</p><ul><li>Adding the broad term <code>AI</code> inflates the estimated number of matches in such a way it triggers the match-pahase filtering.</li><li>Because the rank profile is configured with a <code>match-phase</code>, Vespa first selects a subset of candidate documents using the match-phase attribute (e.g., a recency/freshness signal) before full ranking.</li><li>Only that subset is then ranked with your relevance function (e.g., BM25 + other features). If the best document isn’t in the subset, it cannot win—leading to a lower score and a different top result.</li></ul><p>This explains both the degraded coverage and the unexpected document ordering.</p><p>How to mitigate:</p><ul><li>Tighten the query: Avoid very broad terms if they drastically expand the dataset. Prefer phrases or more specific terms, or separate exploratory queries from precise ones.</li><li>Tune match-phase (schema): Choose a match-phase attribute that correlates with final relevance for your use case; consider increasing <code>max-hits</code> or disabling match-phase for smaller/static corpora when latency allows. See the <a href=https://docs.vespa.ai/en/reference/schema-reference.html#match-phase>schema reference</a>.</li><li>Use diversity: <a href=https://docs.vespa.ai/en/result-diversity.html#match-phase-diversity>Match-phase diversity</a> can spread the selected candidates across groups (e.g., by <code>publisher</code>, <code>series</code>, or another attribute) so a single cluster of similar content doesn’t dominate early selection.</li><li>Observe coverage: Always inspect <code>coverage.degraded.match-phase</code>. If true and coverage is low, you likely filtered too early.</li></ul><p>Example (rank-profile sketch):</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-text data-lang=text><span style=display:flex><span>rank-profile podcast-search inherits default {
+</span></span><span style=display:flex><span>  match-phase {
+</span></span><span style=display:flex><span>    attribute: freshness   # attribute used to select early candidates
+</span></span><span style=display:flex><span>    ascending: false       # newer first if freshness is “higher is newer”
+</span></span><span style=display:flex><span>    max-hits: 10000        # tune based on corpus size / latency budget
+</span></span><span style=display:flex><span>  }
+</span></span><span style=display:flex><span>  # ...rest of ranking config...
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>If your data is small and relatively static, it can be reasonable to remove or relax match-phase for this profile so the full candidate set is ranked. Otherwise, ensure the match-phase attribute and limits reflect what you actually want to bias early—then validate with <code>coverage</code> and result quality.</p></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2025 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
