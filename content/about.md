@@ -12,6 +12,7 @@ Some open source project Niklas has contributed to:
 
 **_Johan_** is a Machine Learning engineer currently working with GenAI
 
-Some open source project Niklas has contributed to: 
+Some open source project Johan has contributed to: 
+- [Axolotl](https://github.com/axolotl-ai-cloud/axolotl)
 - [kubeflow pipelines](https://github.com/kubeflow/pipelines)
 - [scikit-learn](https://github.com/JohanWork/scikit-learn)
