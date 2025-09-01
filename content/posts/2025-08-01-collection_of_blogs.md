@@ -2,7 +2,7 @@
 layout: post
 title: "Collection of blogs"
 subtitle: "collection of blogs"
-date: 2025-08-30
+date: 2025-08-01
 author: "Johan Hansson"
 URL: "/2025/08/01/collection_of_blogs"
 ---
