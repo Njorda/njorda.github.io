@@ -1800,7 +1800,7 @@ In the trace we can see that that the  `query_execution` with the timestamp `311
     }
 ```
 
-After giving the trace to an LLM(through cursor in this case) I got the suggestion to add fast search, lets see the difference adter updating your schema (*.sd) and then deploy it, lets see if we need to trigger a reindex as well. 
+After giving the trace to an LLM(through cursor in this case) I got the suggestion to add fast search, lets see the difference after updating your schema (*.sd) and then deploy it, lets see if we need to trigger a reindex as well. 
 
 So the schema change is: 
 
@@ -1819,9 +1819,7 @@ to
     }
 ```
 
-In this case I missed to add it so it should definitivly be there, lets see the speed up of it. 
-
-As we suggested we need to do a restart of it: 
+As we expected we need to do a restart of the cluster and then trigger a reindex of the data: 
 
 ```bash
 vespa deploy
@@ -1836,7 +1834,7 @@ In cluster 'podcast' of type 'search':
 
 
 
-We are runing it in docker and thus do the following: 
+We are runing it in docker and thus we do the following: 
 
 ```bash
 docker restart vespa-podcast
@@ -1848,7 +1846,7 @@ Then mark the index for reindexing:
 curl -s -X POST "http://localhost:19071/application/v2/tenant/default/application/default/environment/default/region/default/instance/default/reindex?clusterId=podcast&documentType=podcast"
 ```
 
-And then deploy it again, yous should now dont see anything related to the changes. 
+And then deploy it again to verify, you should not see anything related to the changes. 
 
 ```bash
 vespa deploy
@@ -1878,9 +1876,9 @@ curl -s "http://localhost:19071/application/v2/tenant/default/application/defaul
 }
 ```
 
-We can see that the indexing is inprogress. This will take some time due to the amount fo rthe data. 
+The indexing is in progress, this will take some time due to the amount of data. 
 
-When this is done we should see the speed up on the prefix search, because by using an index we pay the price ad ingest time instead of query time. When the indexing is done lets see what the search time is. 
+When this is done we should see the speed up on the prefix search, because by using an index we pay the price at ingest time instead of query time. When the indexing is done lets see what the search time is. 
 
 
 ```bash
@@ -1961,5 +1959,5 @@ vespa query \
 }
 ```
 
-It is sooo fast. It is sub 10 ms. 
+And there we go a more than 10X speed up. Dont forget your indexes!
 

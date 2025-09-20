@@ -171,10 +171,11 @@ To get both scores calculated, we need to include both fields in our selection c
 
 ```bash
 vespa query \
-'yql=select title, description from podcast where title contains "Vespa Voice" or description contains "Vespa Voice"' \
+'yql=select * from podcast where title contains "Vespa Voice" or description contains "Vespa Voice"' \
 'hits=10' \
 'ranking=podcast-search' \
-'input.query(q)=100'
+'input.query(q)=100' \
+'presentation-summary=bolded'
 ```
 
 This gives us what we want - both BM25 scores will be calculated properly.

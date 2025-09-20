@@ -780,3 +780,6 @@ vespa query 'select title from podcast where prefix contains ({maxEditDistance: 
 This works since it uses the `fieldset` for the prefix search which is a grouping for both the `title_array` and the `title_prefix`. 
 
 That is all for this post. In a follow-up, we will dive deeper into the ranking function. 
+
+
+

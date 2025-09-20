@@ -7,7 +7,7 @@ author: "Niklas Hansson"
 URL: "/2025/09/01/vespa_highlights_bolding"
 ---
 
-This post is a follow-up to the [previous post](/2025/08/23/vespa_search_podcast_index), which includes instructions for setting up the cluster if you want to try this yourself.
+This post is a follow-up to the [previous post](/2025/08/30/vespa_podcast_ranking), which includes instructions for setting up the cluster if you want to try this yourself.
 
 Great search results don’t just rank the right documents—they also show users why a result matches. Vespa can both:
 - **Highlight matches (“bolding”)**: wrap matching query terms in `<hi>` tags.
