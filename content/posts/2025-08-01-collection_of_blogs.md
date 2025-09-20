@@ -11,6 +11,7 @@ List of good blogs
 
 - https://decodingml.substack.com/
 - https://research.atspotify.com/
+- https://magazine.sebastianraschka.com/
 - https://www.philschmid.de/
 - https://huggingface.co/blog
 - https://news.ycombinator.com/
