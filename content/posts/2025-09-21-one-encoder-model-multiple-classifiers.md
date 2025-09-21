@@ -1,7 +1,7 @@
 ---
 layout: post 
-title: "How to train a Text classifier without having a embedding model or gpu locally"
-subtitle: "A Step-by-Step Guide to build a text classifier using an embedding api"
+title: "How to Train a Text Classifier Without Having an Embedding Model or GPU Locally"
+subtitle: "A Step-by-Step Guide to Building a Text Classifier Using an Embedding API"
 date: 2025-09-21
 author: "Johan Hansson"
 URL: "/2025/09/21/one-encoder-model-multiple-classifiers/"
