@@ -1,0 +1,613 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>How to train a Text classifier without having a embedding model or gpu locally - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="In this example we will go over how to build a text classifier using an text embedding api. This article is inspierd by Fine-tune classifier with ModernBERT in 2025
+Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential."><meta property="og:image" content><meta property="og:title" content="How to train a Text classifier without having a embedding model or gpu locally"><meta property="og:description" content="In this example we will go over how to build a text classifier using an text embedding api. This article is inspierd by Fine-tune classifier with ModernBERT in 2025
+Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential."><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2025/09/21/one-encoder-model-multiple-classifiers/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2025-09-21T00:00:00+00:00"><meta property="article:modified_time" content="2025-09-21T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="How to train a Text classifier without having a embedding model or gpu locally"><meta name=twitter:description content="In this example we will go over how to build a text classifier using an text embedding api. This article is inspierd by Fine-tune classifier with ModernBERT in 2025
+Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential."><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>How to train a Text classifier without having a embedding model or gpu locally</h1><div class=meta>Posted on Sep 21, 2025</div></div><section class=body><p>In this example we will go over how to build a text classifier using an text embedding api. This article is inspierd by <a href=https://www.philschmid.de/fine-tune-modern-bert-in-2025>Fine-tune classifier with ModernBERT in 2025</a></p><pre tabindex=0><code>Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential.
+</code></pre><p>But instead of running an encoder model locally we will utalize an api to get embeddings and then train a small classifier. This will create a very lightweight setup. Where you can build multiple classifiers on top of one encoder.</p><p><img src=../../../../img/embedding_architecture_diagram.svg alt="One encoder model multiple classifiers"></p><p>The diagram above illustrates the key advantage of our approach:</p><p>Traditional Setup: Each classifier requires its own fine-tuned model running on expensive GPU infrastructure
+Our Approach: One centralized encoder model provides embeddings via API to multiple lightweight CPU-based classifiers</p><p>This architecture provides several benefits:</p><p>💡 Lower Costs: Reduced GPU infrastructure requirements
+🎯 Centralized Management: Single point of maintenance for the encoder
+🔧 Easy Scaling: Add new classifiers without additional GPU resources</p><p>While this API-based approach offers significant advantages, there are some important considerations:</p><ul><li><strong>Latency</strong>: API calls add network delay compared to local inference</li><li><strong>Embedding Model Lock-in</strong>: Changing the embedding model requires retraining all classifiers</li><li><strong>Dependency</strong>: Requires stable internet and API availability</li><li><strong>No Fine-tuning Control</strong>: Can&rsquo;t optimize the encoder for your specific domain/task</li><li><strong>Version Dependencies</strong>: API updates to the embedding model could break existing classifiers</li></ul><p>Ok what that said lets start building! We will use the same dataset as the article linked above. <a href=https://huggingface.co/datasets/mteb/banking77>Banking77Classification
+</a>, it has what wee neeed. A text and a lable. First step is to download the dataset and add embeddings to the dataset, one embedding for each text. In this example we will use gemini(gcp) to create the embeddings but you can use any embedding api you want. However rembert that diffrent embeddings will give diffrent embeddings and that might effect you end performance.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> numpy <span style=color:#66d9ef>as</span> np
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> time
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> os
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> google <span style=color:#f92672>import</span> genai
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> google.genai <span style=color:#f92672>import</span> types
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> tqdm.auto <span style=color:#f92672>import</span> tqdm  <span style=color:#75715e># Use tqdm.auto for better Jupyter support</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> datasets <span style=color:#f92672>import</span> Dataset, DatasetDict
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> datasets <span style=color:#f92672>import</span> load_dataset
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> dotenv <span style=color:#f92672>import</span> load_dotenv
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>load_dotenv()
+</span></span><span style=display:flex><span>api_key <span style=color:#f92672>=</span> os<span style=color:#f92672>.</span>getenv(<span style=color:#e6db74>&#39;gemini_api_key&#39;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># Dataset id from huggingface.co/dataset</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># dataset_id = &#34;DevQuasar/llm_router_dataset-synth&#34;</span>
+</span></span><span style=display:flex><span>dataset_id <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;legacy-datasets/banking77&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> <span style=color:#f92672>not</span> api_key:
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>raise</span> <span style=color:#a6e22e>ValueError</span>(<span style=color:#e6db74>&#34;gemini_api_key not found in environment variables&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>client <span style=color:#f92672>=</span> genai<span style=color:#f92672>.</span>Client(api_key<span style=color:#f92672>=</span>api_key)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>get_embeddings_batch</span>(texts, max_retries<span style=color:#f92672>=</span><span style=color:#ae81ff>3</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Get embeddings for a batch of texts with retry logic and exponential backoff.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        texts: List of text strings to embed
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        max_retries: Maximum number of retry attempts
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        List of numpy arrays containing embeddings
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> attempt <span style=color:#f92672>in</span> range(max_retries):
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>try</span>:
+</span></span><span style=display:flex><span>            result <span style=color:#f92672>=</span> client<span style=color:#f92672>.</span>models<span style=color:#f92672>.</span>embed_content(
+</span></span><span style=display:flex><span>                model<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;gemini-embedding-001&#34;</span>,
+</span></span><span style=display:flex><span>                contents<span style=color:#f92672>=</span>texts
+</span></span><span style=display:flex><span>            )
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> [np<span style=color:#f92672>.</span>array(e<span style=color:#f92672>.</span>values) <span style=color:#66d9ef>for</span> e <span style=color:#f92672>in</span> result<span style=color:#f92672>.</span>embeddings]
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>except</span> <span style=color:#a6e22e>Exception</span> <span style=color:#66d9ef>as</span> e:
+</span></span><span style=display:flex><span>            print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Attempt </span><span style=color:#e6db74>{</span>attempt <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span><span style=color:#e6db74>}</span><span style=color:#e6db74> failed: </span><span style=color:#e6db74>{</span>str(e)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>            
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> attempt <span style=color:#f92672>==</span> max_retries <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>:
+</span></span><span style=display:flex><span>                <span style=color:#75715e># Last attempt failed, re-raise the exception</span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>raise</span> e
+</span></span><span style=display:flex><span>            
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Exponential backoff: wait 2^attempt seconds</span>
+</span></span><span style=display:flex><span>            wait_time <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span> <span style=color:#f92672>**</span> attempt
+</span></span><span style=display:flex><span>            print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Waiting </span><span style=color:#e6db74>{</span>wait_time<span style=color:#e6db74>}</span><span style=color:#e6db74> seconds before retry...&#34;</span>)
+</span></span><span style=display:flex><span>            time<span style=color:#f92672>.</span>sleep(wait_time)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>add_embeddings_to_dataset</span>(dataset, text_column<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;text&#34;</span>, batch_size<span style=color:#f92672>=</span><span style=color:#ae81ff>50</span>, test_mode<span style=color:#f92672>=</span><span style=color:#66d9ef>False</span>, test_samples<span style=color:#f92672>=</span><span style=color:#ae81ff>10</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Add embeddings to a Hugging Face dataset with improved rate limiting.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        dataset: Hugging Face dataset object
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        text_column: Name of the column containing text to embed
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        batch_size: Number of texts to process at once (reduced to 50 for better stability)
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_mode: If True, only process a small subset for testing
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_samples: Number of samples to process in test mode
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        Dataset with added &#39;embedding&#39; column
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>def</span> <span style=color:#a6e22e>process_split</span>(split_data, split_name):
+</span></span><span style=display:flex><span>        <span style=color:#e6db74>&#34;&#34;&#34;Process a single dataset split (train/test).&#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Processing </span><span style=color:#e6db74>{</span>split_name<span style=color:#e6db74>}</span><span style=color:#e6db74> split...&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Get texts to process</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> test_mode:
+</span></span><span style=display:flex><span>            texts <span style=color:#f92672>=</span> split_data[text_column][:test_samples]
+</span></span><span style=display:flex><span>            total_samples <span style=color:#f92672>=</span> min(test_samples, len(split_data))
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>            texts <span style=color:#f92672>=</span> split_data[text_column]
+</span></span><span style=display:flex><span>            total_samples <span style=color:#f92672>=</span> len(split_data)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Total samples to process: </span><span style=color:#e6db74>{</span>total_samples<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Process in batches</span>
+</span></span><span style=display:flex><span>        all_embeddings <span style=color:#f92672>=</span> []
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> tqdm(range(<span style=color:#ae81ff>0</span>, total_samples, batch_size), desc<span style=color:#f92672>=</span><span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Embedding </span><span style=color:#e6db74>{</span>split_name<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>):
+</span></span><span style=display:flex><span>            batch_end <span style=color:#f92672>=</span> min(i <span style=color:#f92672>+</span> batch_size, total_samples)
+</span></span><span style=display:flex><span>            batch_texts <span style=color:#f92672>=</span> texts[i:batch_end]
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>try</span>:
+</span></span><span style=display:flex><span>                <span style=color:#75715e># Get embeddings for this batch</span>
+</span></span><span style=display:flex><span>                batch_embeddings <span style=color:#f92672>=</span> get_embeddings_batch(batch_texts)
+</span></span><span style=display:flex><span>                all_embeddings<span style=color:#f92672>.</span>extend(batch_embeddings)
+</span></span><span style=display:flex><span>                
+</span></span><span style=display:flex><span>                <span style=color:#75715e># Progress update</span>
+</span></span><span style=display:flex><span>                print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Processed batch </span><span style=color:#e6db74>{</span>i<span style=color:#f92672>//</span>batch_size <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span><span style=color:#e6db74>}</span><span style=color:#e6db74>/</span><span style=color:#e6db74>{</span>(total_samples <span style=color:#f92672>+</span> batch_size <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)<span style=color:#f92672>//</span>batch_size<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>except</span> <span style=color:#a6e22e>Exception</span> <span style=color:#66d9ef>as</span> e:
+</span></span><span style=display:flex><span>                print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Failed to process batch starting at index </span><span style=color:#e6db74>{</span>i<span style=color:#e6db74>}</span><span style=color:#e6db74>: </span><span style=color:#e6db74>{</span>str(e)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>                <span style=color:#75715e># You could choose to skip this batch or stop processing</span>
+</span></span><span style=display:flex><span>                <span style=color:#75715e># For now, we&#39;ll skip and continue</span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>continue</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Rate limiting: wait between batches to avoid hitting API limits</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> i <span style=color:#f92672>+</span> batch_size <span style=color:#f92672>&lt;</span> total_samples:
+</span></span><span style=display:flex><span>                time<span style=color:#f92672>.</span>sleep(<span style=color:#ae81ff>1</span>)  <span style=color:#75715e># Reduced from 0.5 to 1 second for better rate limiting</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Add embeddings to the dataset</span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> test_mode:
+</span></span><span style=display:flex><span>            <span style=color:#75715e># For test mode, create a subset with embeddings</span>
+</span></span><span style=display:flex><span>            subset_data <span style=color:#f92672>=</span> {key: split_data[key][:len(all_embeddings)] <span style=color:#66d9ef>for</span> key <span style=color:#f92672>in</span> split_data<span style=color:#f92672>.</span>features}
+</span></span><span style=display:flex><span>            subset_data[<span style=color:#e6db74>&#39;embedding&#39;</span>] <span style=color:#f92672>=</span> all_embeddings
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> subset_data
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Add embeddings to full dataset</span>
+</span></span><span style=display:flex><span>            split_data <span style=color:#f92672>=</span> split_data<span style=color:#f92672>.</span>add_column(<span style=color:#e6db74>&#39;embedding&#39;</span>, all_embeddings)
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> split_data
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Process each split</span>
+</span></span><span style=display:flex><span>    processed_dataset <span style=color:#f92672>=</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> split_name <span style=color:#f92672>in</span> dataset<span style=color:#f92672>.</span>keys():
+</span></span><span style=display:flex><span>        processed_dataset[split_name] <span style=color:#f92672>=</span> process_split(dataset[split_name], split_name)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> processed_dataset
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>main</span>():
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;Main function to load dataset and add embeddings.&#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Configuration</span>
+</span></span><span style=display:flex><span>    DATASET_ID <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;legacy-datasets/banking77&#34;</span>
+</span></span><span style=display:flex><span>    TEXT_COLUMN <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;text&#34;</span>
+</span></span><span style=display:flex><span>    BATCH_SIZE <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span>  <span style=color:#75715e># Reduced from 100 to 50 for better stability</span>
+</span></span><span style=display:flex><span>    TEST_MODE <span style=color:#f92672>=</span> <span style=color:#66d9ef>False</span>  <span style=color:#75715e># Set to False to process full dataset</span>
+</span></span><span style=display:flex><span>    TEST_SAMPLES <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span>  <span style=color:#75715e># Number of samples to process in test mode</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Dataset Embedding Generator&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Load dataset</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Loading dataset: </span><span style=color:#e6db74>{</span>DATASET_ID<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    raw_dataset <span style=color:#f92672>=</span> load_dataset(DATASET_ID)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Train dataset size: </span><span style=color:#e6db74>{</span>len(raw_dataset[<span style=color:#e6db74>&#39;train&#39;</span>])<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test dataset size: </span><span style=color:#e6db74>{</span>len(raw_dataset[<span style=color:#e6db74>&#39;test&#39;</span>])<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> TEST_MODE:
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>⚠️  TEST MODE: Processing only </span><span style=color:#e6db74>{</span>TEST_SAMPLES<span style=color:#e6db74>}</span><span style=color:#e6db74> samples per split&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;Set TEST_MODE = False to process the full dataset&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Add embeddings to dataset</span>
+</span></span><span style=display:flex><span>    dataset_with_embeddings <span style=color:#f92672>=</span> add_embeddings_to_dataset(
+</span></span><span style=display:flex><span>        raw_dataset,
+</span></span><span style=display:flex><span>        text_column<span style=color:#f92672>=</span>TEXT_COLUMN,
+</span></span><span style=display:flex><span>        batch_size<span style=color:#f92672>=</span>BATCH_SIZE,
+</span></span><span style=display:flex><span>        test_mode<span style=color:#f92672>=</span>TEST_MODE,
+</span></span><span style=display:flex><span>        test_samples<span style=color:#f92672>=</span>TEST_SAMPLES
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Save the dataset with embeddings FIRST (to avoid losing work)</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Saving dataset with embeddings...&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Convert to Hugging Face Dataset format if needed</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>from</span> datasets <span style=color:#f92672>import</span> Dataset, DatasetDict
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    final_dataset <span style=color:#f92672>=</span> DatasetDict({
+</span></span><span style=display:flex><span>        split: Dataset<span style=color:#f92672>.</span>from_dict(data) <span style=color:#66d9ef>if</span> isinstance(data, dict) <span style=color:#66d9ef>else</span> data
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>for</span> split, data <span style=color:#f92672>in</span> dataset_with_embeddings<span style=color:#f92672>.</span>items()
+</span></span><span style=display:flex><span>    })
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Save to disk</span>
+</span></span><span style=display:flex><span>    final_dataset<span style=color:#f92672>.</span>save_to_disk(<span style=color:#e6db74>&#34;datasets/banking77_with_embeddings_test&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Dataset saved to datasets/banking77_with_embeddings_test&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Verify embeddings were added (after saving)</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Verification&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> split_name <span style=color:#f92672>in</span> dataset_with_embeddings<span style=color:#f92672>.</span>keys():
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> TEST_MODE:
+</span></span><span style=display:flex><span>            <span style=color:#75715e># For test mode, check the dictionary structure</span>
+</span></span><span style=display:flex><span>            sample_embedding <span style=color:#f92672>=</span> dataset_with_embeddings[split_name][<span style=color:#e6db74>&#39;embedding&#39;</span>][<span style=color:#ae81ff>0</span>]
+</span></span><span style=display:flex><span>            num_samples <span style=color:#f92672>=</span> len(dataset_with_embeddings[split_name][<span style=color:#e6db74>&#39;embedding&#39;</span>])
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>            <span style=color:#75715e># For full mode, check the dataset structure</span>
+</span></span><span style=display:flex><span>            sample_embedding <span style=color:#f92672>=</span> dataset_with_embeddings[split_name][<span style=color:#ae81ff>0</span>][<span style=color:#e6db74>&#39;embedding&#39;</span>]
+</span></span><span style=display:flex><span>            num_samples <span style=color:#f92672>=</span> len(dataset_with_embeddings[split_name])
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Convert to numpy array to get shape safely</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>import</span> numpy <span style=color:#66d9ef>as</span> np
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> isinstance(sample_embedding, list):
+</span></span><span style=display:flex><span>            sample_embedding <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array(sample_embedding)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>{</span>split_name<span style=color:#f92672>.</span>capitalize()<span style=color:#e6db74>}</span><span style=color:#e6db74> split:&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - Number of samples: </span><span style=color:#e6db74>{</span>num_samples<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - Embedding shape: </span><span style=color:#e6db74>{</span>sample_embedding<span style=color:#f92672>.</span>shape<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - Sample text: </span><span style=color:#e6db74>{</span>dataset_with_embeddings[split_name][TEXT_COLUMN][<span style=color:#ae81ff>0</span>][:<span style=color:#ae81ff>100</span>]<span style=color:#e6db74>}</span><span style=color:#e6db74>...&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - Sample embedding (first 5 dims): </span><span style=color:#e6db74>{</span>sample_embedding[:<span style=color:#ae81ff>5</span>]<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> dataset_with_embeddings
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>convert_to_huggingface_dataset</span>(dataset_with_embeddings):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Convert the processed dataset (from test or full mode) into a proper Hugging Face Dataset.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        dataset_with_embeddings: Dictionary with train/test splits containing embeddings
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        DatasetDict: Properly formatted Hugging Face dataset
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Converting to Hugging Face Dataset format...&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Create a new DatasetDict</span>
+</span></span><span style=display:flex><span>    final_dataset_dict <span style=color:#f92672>=</span> {}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> split_name, split_data <span style=color:#f92672>in</span> dataset_with_embeddings<span style=color:#f92672>.</span>items():
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Processing </span><span style=color:#e6db74>{</span>split_name<span style=color:#e6db74>}</span><span style=color:#e6db74> split...&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> isinstance(split_data, dict):
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Test mode or dictionary format</span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Convert numpy arrays to lists for proper serialization</span>
+</span></span><span style=display:flex><span>            data_dict <span style=color:#f92672>=</span> {}
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>for</span> key, values <span style=color:#f92672>in</span> split_data<span style=color:#f92672>.</span>items():
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> key <span style=color:#f92672>==</span> <span style=color:#e6db74>&#39;embedding&#39;</span>:
+</span></span><span style=display:flex><span>                    <span style=color:#75715e># Convert numpy arrays to lists</span>
+</span></span><span style=display:flex><span>                    data_dict[key] <span style=color:#f92672>=</span> [arr<span style=color:#f92672>.</span>tolist() <span style=color:#66d9ef>if</span> isinstance(arr, np<span style=color:#f92672>.</span>ndarray) <span style=color:#66d9ef>else</span> arr
+</span></span><span style=display:flex><span>                                     <span style=color:#66d9ef>for</span> arr <span style=color:#f92672>in</span> values]
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>                    data_dict[key] <span style=color:#f92672>=</span> values
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Create Dataset from dictionary</span>
+</span></span><span style=display:flex><span>            dataset <span style=color:#f92672>=</span> Dataset<span style=color:#f92672>.</span>from_dict(data_dict)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Already a Dataset object, but need to ensure embeddings are properly formatted</span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Convert the dataset to dict, process embeddings, then recreate</span>
+</span></span><span style=display:flex><span>            data_dict <span style=color:#f92672>=</span> split_data<span style=color:#f92672>.</span>to_dict() <span style=color:#66d9ef>if</span> hasattr(split_data, <span style=color:#e6db74>&#39;to_dict&#39;</span>) <span style=color:#66d9ef>else</span> dict(split_data)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            <span style=color:#75715e># Ensure embeddings are in list format</span>
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> <span style=color:#e6db74>&#39;embedding&#39;</span> <span style=color:#f92672>in</span> data_dict:
+</span></span><span style=display:flex><span>                data_dict[<span style=color:#e6db74>&#39;embedding&#39;</span>] <span style=color:#f92672>=</span> [
+</span></span><span style=display:flex><span>                    arr<span style=color:#f92672>.</span>tolist() <span style=color:#66d9ef>if</span> isinstance(arr, np<span style=color:#f92672>.</span>ndarray) <span style=color:#66d9ef>else</span> arr
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>for</span> arr <span style=color:#f92672>in</span> data_dict[<span style=color:#e6db74>&#39;embedding&#39;</span>]
+</span></span><span style=display:flex><span>                ]
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>            dataset <span style=color:#f92672>=</span> Dataset<span style=color:#f92672>.</span>from_dict(data_dict)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        final_dataset_dict[split_name] <span style=color:#f92672>=</span> dataset
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Print info about this split</span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - </span><span style=color:#e6db74>{</span>split_name<span style=color:#e6db74>}</span><span style=color:#e6db74>: </span><span style=color:#e6db74>{</span>len(dataset)<span style=color:#e6db74>}</span><span style=color:#e6db74> samples&#34;</span>)
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>if</span> <span style=color:#e6db74>&#39;embedding&#39;</span> <span style=color:#f92672>in</span> dataset<span style=color:#f92672>.</span>column_names:
+</span></span><span style=display:flex><span>            sample_embedding <span style=color:#f92672>=</span> dataset[<span style=color:#ae81ff>0</span>][<span style=color:#e6db74>&#39;embedding&#39;</span>]
+</span></span><span style=display:flex><span>            print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;  - Embedding dimension: </span><span style=color:#e6db74>{</span>len(sample_embedding)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Create final DatasetDict</span>
+</span></span><span style=display:flex><span>    final_dataset <span style=color:#f92672>=</span> DatasetDict(final_dataset_dict)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Dataset conversion complete!&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Dataset info: </span><span style=color:#e6db74>{</span>final_dataset<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> final_dataset
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>main()
+</span></span></code></pre></div><p>This code will read the dataset and add embeddings to each text feild, it will send batches of text to the api to improve latency and in this case also lower the cost(lower cost per token for batch). However for gemini and my quota there is a max of 100 text snippets in each request. Finally we store the new dataset on disk so we don&rsquo;t have to reacreate it. If you future want to optimize the code you can update it to run ascync, this would speed it up however make sure you have the quota/api to support it.</p><p>The nex step is to buiild the classifier. There are multiple types of model that would work fine but a good starting point is normaly random forest below are some properties of it.</p><ul><li><strong>Minimal preprocessing required</strong> - Unlike many algorithms, Random Forest handles mixed data types (numerical and categorical) well without extensive feature scaling or encoding. It&rsquo;s also relatively robust to outliers and missing values.</li><li><strong>Built-in feature selection</strong> - The algorithm provides feature importance scores automatically, helping you understand which variables matter most for your predictions. This insight is valuable for both model interpretation and feature engineering.</li><li><strong>Reduces overfitting</strong> - By combining multiple decision trees and using bootstrap sampling, Random Forest naturally reduces the overfitting that individual decision trees are prone to, often giving you better generalization without much tuning.</li><li><strong>Good default performance</strong> - Random Forest typically performs well &ldquo;out of the box&rdquo; with minimal hyperparameter tuning. You can often get reasonable results with default settings before optimizing further.</li><li><strong>Handles non-linear relationships</strong> - The tree-based structure captures complex, non-linear patterns in data without requiring you to manually specify interaction terms or transformations.</li><li><strong>Provides uncertainty estimates</strong> - The probability outputs from Random Forest give you a sense of prediction confidence, which is useful for understanding model reliability.</li><li><strong>Computationally reasonable</strong> - While not the fastest algorithm, Random Forest trains relatively quickly and can handle moderately large datasets without specialized hardware.</li><li><strong>Interpretable foundation</strong> - Though not as interpretable as a single decision tree, Random Forest is more explainable than black-box methods like neural networks, making it easier to validate and trust your initial results.</li></ul><p>Of course it has some draw backs where the biggest one is that I can struggel with higly inbalanced datasets. However in our case that is not a problem. Compared to other model types it is slow a prediction times since we will have to travears multiple trees but for this case it is fine.</p><p>Below is the code for training a random forest model.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> numpy <span style=color:#66d9ef>as</span> np
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> joblib
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> os
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> datasets <span style=color:#f92672>import</span> load_from_disk
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> sklearn.ensemble <span style=color:#f92672>import</span> RandomForestClassifier
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> sklearn.metrics <span style=color:#f92672>import</span> classification_report, accuracy_score, confusion_matrix
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> sklearn.model_selection <span style=color:#f92672>import</span> cross_val_score
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> matplotlib.pyplot <span style=color:#66d9ef>as</span> plt
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> seaborn <span style=color:#66d9ef>as</span> sns
+</span></span><span style=display:flex><span><span style=color:#f92672>from</span> tqdm.auto <span style=color:#f92672>import</span> tqdm
+</span></span><span style=display:flex><span><span style=color:#f92672>import</span> warnings
+</span></span><span style=display:flex><span>warnings<span style=color:#f92672>.</span>filterwarnings(<span style=color:#e6db74>&#39;ignore&#39;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>load_dataset_with_embeddings</span>(dataset_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;banking77_with_embeddings_test&#34;</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Load the dataset with embeddings from disk.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        dataset_path: Path to the saved dataset directory
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        DatasetDict containing train and test splits with embeddings
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Loading dataset from </span><span style=color:#e6db74>{</span>dataset_path<span style=color:#e6db74>}</span><span style=color:#e6db74>...&#34;</span>)
+</span></span><span style=display:flex><span>    dataset <span style=color:#f92672>=</span> load_from_disk(dataset_path)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Train samples: </span><span style=color:#e6db74>{</span>len(dataset[<span style=color:#e6db74>&#39;train&#39;</span>])<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test samples: </span><span style=color:#e6db74>{</span>len(dataset[<span style=color:#e6db74>&#39;test&#39;</span>])<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Number of classes: </span><span style=color:#e6db74>{</span>len(dataset[<span style=color:#e6db74>&#39;train&#39;</span>]<span style=color:#f92672>.</span>features[<span style=color:#e6db74>&#39;label&#39;</span>]<span style=color:#f92672>.</span>names)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Embedding dimension: </span><span style=color:#e6db74>{</span>len(dataset[<span style=color:#e6db74>&#39;train&#39;</span>][<span style=color:#ae81ff>0</span>][<span style=color:#e6db74>&#39;embedding&#39;</span>])<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> dataset
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>prepare_data</span>(dataset, test_mode<span style=color:#f92672>=</span><span style=color:#66d9ef>False</span>, test_samples<span style=color:#f92672>=</span><span style=color:#ae81ff>100</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Prepare the data for training by extracting embeddings and labels.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        dataset: DatasetDict with train and test splits
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_mode: If True, use only a subset of data for testing
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_samples: Number of samples to use in test mode
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        Tuple of (X_train, y_train, X_test, y_test, label_names)
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Preparing data...&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Extract train data</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> test_mode:
+</span></span><span style=display:flex><span>        train_data <span style=color:#f92672>=</span> dataset[<span style=color:#e6db74>&#39;train&#39;</span>]<span style=color:#f92672>.</span>select(range(min(test_samples, len(dataset[<span style=color:#e6db74>&#39;train&#39;</span>]))))
+</span></span><span style=display:flex><span>        test_data <span style=color:#f92672>=</span> dataset[<span style=color:#e6db74>&#39;test&#39;</span>]<span style=color:#f92672>.</span>select(range(min(test_samples, len(dataset[<span style=color:#e6db74>&#39;test&#39;</span>]))))
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Using </span><span style=color:#e6db74>{</span>len(train_data)<span style=color:#e6db74>}</span><span style=color:#e6db74> train samples and </span><span style=color:#e6db74>{</span>len(test_data)<span style=color:#e6db74>}</span><span style=color:#e6db74> test samples (test mode)&#34;</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>        train_data <span style=color:#f92672>=</span> dataset[<span style=color:#e6db74>&#39;train&#39;</span>]
+</span></span><span style=display:flex><span>        test_data <span style=color:#f92672>=</span> dataset[<span style=color:#e6db74>&#39;test&#39;</span>]
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Using </span><span style=color:#e6db74>{</span>len(train_data)<span style=color:#e6db74>}</span><span style=color:#e6db74> train samples and </span><span style=color:#e6db74>{</span>len(test_data)<span style=color:#e6db74>}</span><span style=color:#e6db74> test samples (full mode)&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Extract embeddings and labels</span>
+</span></span><span style=display:flex><span>    X_train <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array([sample[<span style=color:#e6db74>&#39;embedding&#39;</span>] <span style=color:#66d9ef>for</span> sample <span style=color:#f92672>in</span> train_data])
+</span></span><span style=display:flex><span>    y_train <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array([sample[<span style=color:#e6db74>&#39;label&#39;</span>] <span style=color:#66d9ef>for</span> sample <span style=color:#f92672>in</span> train_data])
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    X_test <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array([sample[<span style=color:#e6db74>&#39;embedding&#39;</span>] <span style=color:#66d9ef>for</span> sample <span style=color:#f92672>in</span> test_data])
+</span></span><span style=display:flex><span>    y_test <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>array([sample[<span style=color:#e6db74>&#39;label&#39;</span>] <span style=color:#66d9ef>for</span> sample <span style=color:#f92672>in</span> test_data])
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Get label names</span>
+</span></span><span style=display:flex><span>    label_names <span style=color:#f92672>=</span> train_data<span style=color:#f92672>.</span>features[<span style=color:#e6db74>&#39;label&#39;</span>]<span style=color:#f92672>.</span>names
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Training data shape: </span><span style=color:#e6db74>{</span>X_train<span style=color:#f92672>.</span>shape<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test data shape: </span><span style=color:#e6db74>{</span>X_test<span style=color:#f92672>.</span>shape<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Number of unique labels in train: </span><span style=color:#e6db74>{</span>len(np<span style=color:#f92672>.</span>unique(y_train))<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Number of unique labels in test: </span><span style=color:#e6db74>{</span>len(np<span style=color:#f92672>.</span>unique(y_test))<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> X_train, y_train, X_test, y_test, label_names
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>train_random_forest</span>(X_train, y_train, n_estimators<span style=color:#f92672>=</span><span style=color:#ae81ff>100</span>, max_depth<span style=color:#f92672>=</span><span style=color:#66d9ef>None</span>, random_state<span style=color:#f92672>=</span><span style=color:#ae81ff>42</span>, test_mode<span style=color:#f92672>=</span><span style=color:#66d9ef>False</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Train a Random Forest classifier on the embeddings.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        X_train: Training embeddings
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        y_train: Training labels
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        n_estimators: Number of trees in the forest
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        max_depth: Maximum depth of trees
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        random_state: Random state for reproducibility
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_mode: If True, use smaller parameters for faster training
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        Trained RandomForestClassifier
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Training Random Forest classifier...&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> test_mode:
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Use smaller parameters for test mode</span>
+</span></span><span style=display:flex><span>        n_estimators <span style=color:#f92672>=</span> min(<span style=color:#ae81ff>50</span>, n_estimators)
+</span></span><span style=display:flex><span>        max_depth <span style=color:#f92672>=</span> min(<span style=color:#ae81ff>10</span>, max_depth) <span style=color:#66d9ef>if</span> max_depth <span style=color:#66d9ef>else</span> <span style=color:#ae81ff>10</span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test mode: Using </span><span style=color:#e6db74>{</span>n_estimators<span style=color:#e6db74>}</span><span style=color:#e6db74> estimators, max_depth=</span><span style=color:#e6db74>{</span>max_depth<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Create and train the classifier</span>
+</span></span><span style=display:flex><span>    rf_classifier <span style=color:#f92672>=</span> RandomForestClassifier(
+</span></span><span style=display:flex><span>        n_estimators<span style=color:#f92672>=</span>n_estimators,
+</span></span><span style=display:flex><span>        max_depth<span style=color:#f92672>=</span>max_depth,
+</span></span><span style=display:flex><span>        random_state<span style=color:#f92672>=</span>random_state,
+</span></span><span style=display:flex><span>        n_jobs<span style=color:#f92672>=-</span><span style=color:#ae81ff>1</span>,  <span style=color:#75715e># Use all available cores</span>
+</span></span><span style=display:flex><span>        verbose<span style=color:#f92672>=</span><span style=color:#ae81ff>1</span> <span style=color:#66d9ef>if</span> test_mode <span style=color:#66d9ef>else</span> <span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Fitting the model...&#34;</span>)
+</span></span><span style=display:flex><span>    rf_classifier<span style=color:#f92672>.</span>fit(X_train, y_train)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Training completed!&#34;</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> rf_classifier
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>evaluate_model</span>(model, X_test, y_test, label_names, test_mode<span style=color:#f92672>=</span><span style=color:#66d9ef>False</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Evaluate the trained model and print detailed results.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        model: Trained RandomForestClassifier
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        X_test: Test embeddings
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        y_test: Test labels
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        label_names: List of class names
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        test_mode: If True, skip some detailed analysis for speed
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;MODEL EVALUATION&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Make predictions</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Making predictions...&#34;</span>)
+</span></span><span style=display:flex><span>    y_pred <span style=color:#f92672>=</span> model<span style=color:#f92672>.</span>predict(X_test)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Calculate accuracy</span>
+</span></span><span style=display:flex><span>    accuracy <span style=color:#f92672>=</span> accuracy_score(y_test, y_pred)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Overall Accuracy: </span><span style=color:#e6db74>{</span>accuracy<span style=color:#e6db74>:</span><span style=color:#e6db74>.4f</span><span style=color:#e6db74>}</span><span style=color:#e6db74> (</span><span style=color:#e6db74>{</span>accuracy<span style=color:#f92672>*</span><span style=color:#ae81ff>100</span><span style=color:#e6db74>:</span><span style=color:#e6db74>.2f</span><span style=color:#e6db74>}</span><span style=color:#e6db74>%)&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Get unique classes in test data and their corresponding names</span>
+</span></span><span style=display:flex><span>    unique_classes <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>unique(np<span style=color:#f92672>.</span>concatenate([y_test, y_pred]))
+</span></span><span style=display:flex><span>    relevant_label_names <span style=color:#f92672>=</span> [label_names[i] <span style=color:#66d9ef>for</span> i <span style=color:#f92672>in</span> unique_classes]
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Classes present in test data: </span><span style=color:#e6db74>{</span>len(unique_classes)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Class indices: </span><span style=color:#e6db74>{</span>unique_classes<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Class names: </span><span style=color:#e6db74>{</span>relevant_label_names<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Classification report</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Detailed Classification Report:&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;-&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>40</span>)
+</span></span><span style=display:flex><span>    report <span style=color:#f92672>=</span> classification_report(
+</span></span><span style=display:flex><span>        y_test, y_pred, 
+</span></span><span style=display:flex><span>        target_names<span style=color:#f92672>=</span>relevant_label_names, 
+</span></span><span style=display:flex><span>        labels<span style=color:#f92672>=</span>unique_classes,
+</span></span><span style=display:flex><span>        zero_division<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>    print(report)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Save classification report to file</span>
+</span></span><span style=display:flex><span>    report_filename <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;classification_report.txt&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>with</span> open(report_filename, <span style=color:#e6db74>&#39;w&#39;</span>) <span style=color:#66d9ef>as</span> f:
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;Classification Report</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Overall Accuracy: </span><span style=color:#e6db74>{</span>accuracy<span style=color:#e6db74>:</span><span style=color:#e6db74>.4f</span><span style=color:#e6db74>}</span><span style=color:#e6db74> (</span><span style=color:#e6db74>{</span>accuracy<span style=color:#f92672>*</span><span style=color:#ae81ff>100</span><span style=color:#e6db74>:</span><span style=color:#e6db74>.2f</span><span style=color:#e6db74>}</span><span style=color:#e6db74>%)</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Classes present in test data: </span><span style=color:#e6db74>{</span>len(unique_classes)<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Class indices: </span><span style=color:#e6db74>{</span>unique_classes<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Class names: </span><span style=color:#e6db74>{</span>relevant_label_names<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;Detailed Classification Report:</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;-&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>40</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(report)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Classification report saved to &#39;</span><span style=color:#e6db74>{</span>report_filename<span style=color:#e6db74>}</span><span style=color:#e6db74>&#39;&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Feature importance (top 10)</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Top 10 Most Important Features (Embedding Dimensions):&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;-&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>50</span>)
+</span></span><span style=display:flex><span>    feature_importance <span style=color:#f92672>=</span> model<span style=color:#f92672>.</span>feature_importances_
+</span></span><span style=display:flex><span>    top_indices <span style=color:#f92672>=</span> np<span style=color:#f92672>.</span>argsort(feature_importance)[<span style=color:#f92672>-</span><span style=color:#ae81ff>10</span>:][::<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>]
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>for</span> i, idx <span style=color:#f92672>in</span> enumerate(top_indices):
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#e6db74>{</span>i<span style=color:#f92672>+</span><span style=color:#ae81ff>1</span><span style=color:#e6db74>:</span><span style=color:#e6db74>2d</span><span style=color:#e6db74>}</span><span style=color:#e6db74>. Dimension </span><span style=color:#e6db74>{</span>idx<span style=color:#e6db74>:</span><span style=color:#e6db74>4d</span><span style=color:#e6db74>}</span><span style=color:#e6db74>: </span><span style=color:#e6db74>{</span>feature_importance[idx]<span style=color:#e6db74>:</span><span style=color:#e6db74>.6f</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Always create confusion matrix</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Confusion Matrix:&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;-&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>20</span>)
+</span></span><span style=display:flex><span>    cm <span style=color:#f92672>=</span> confusion_matrix(y_test, y_pred, labels<span style=color:#f92672>=</span>unique_classes)
+</span></span><span style=display:flex><span>    print(cm)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Save confusion matrix as text file</span>
+</span></span><span style=display:flex><span>    cm_filename <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;confusion_matrix.txt&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>with</span> open(cm_filename, <span style=color:#e6db74>&#39;w&#39;</span>) <span style=color:#66d9ef>as</span> f:
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;Confusion Matrix</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;=&#34;</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>30</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Shape: </span><span style=color:#e6db74>{</span>cm<span style=color:#f92672>.</span>shape<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Classes: </span><span style=color:#e6db74>{</span>len(unique_classes)<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>&#34;Matrix (rows=actual, cols=predicted):</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(str(cm))
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>Class indices: </span><span style=color:#e6db74>{</span>unique_classes<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        f<span style=color:#f92672>.</span>write(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Class names: </span><span style=color:#e6db74>{</span>relevant_label_names<span style=color:#e6db74>}</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Confusion matrix saved to &#39;</span><span style=color:#e6db74>{</span>cm_filename<span style=color:#e6db74>}</span><span style=color:#e6db74>&#39;&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Create confusion matrix visualization</span>
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> len(unique_classes) <span style=color:#f92672>&lt;=</span> <span style=color:#ae81ff>15</span>:
+</span></span><span style=display:flex><span>        <span style=color:#75715e># For small number of classes, create detailed heatmap</span>
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>figure(figsize<span style=color:#f92672>=</span>(<span style=color:#ae81ff>12</span>, <span style=color:#ae81ff>10</span>))
+</span></span><span style=display:flex><span>        sns<span style=color:#f92672>.</span>heatmap(cm, annot<span style=color:#f92672>=</span><span style=color:#66d9ef>True</span>, fmt<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;d&#39;</span>, cmap<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;Blues&#39;</span>, 
+</span></span><span style=display:flex><span>                   xticklabels<span style=color:#f92672>=</span>relevant_label_names, 
+</span></span><span style=display:flex><span>                   yticklabels<span style=color:#f92672>=</span>relevant_label_names)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>title(<span style=color:#e6db74>&#39;Confusion Matrix&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>ylabel(<span style=color:#e6db74>&#39;True Label&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>xlabel(<span style=color:#e6db74>&#39;Predicted Label&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>xticks(rotation<span style=color:#f92672>=</span><span style=color:#ae81ff>45</span>, ha<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;right&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>yticks(rotation<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>tight_layout()
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>savefig(<span style=color:#e6db74>&#39;confusion_matrix.png&#39;</span>, dpi<span style=color:#f92672>=</span><span style=color:#ae81ff>150</span>, bbox_inches<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;tight&#39;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;Confusion matrix visualization saved as &#39;confusion_matrix.png&#39;&#34;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>close()
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>        <span style=color:#75715e># For large number of classes, create a summary heatmap</span>
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>figure(figsize<span style=color:#f92672>=</span>(<span style=color:#ae81ff>15</span>, <span style=color:#ae81ff>12</span>))
+</span></span><span style=display:flex><span>        sns<span style=color:#f92672>.</span>heatmap(cm, annot<span style=color:#f92672>=</span><span style=color:#66d9ef>False</span>, fmt<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;d&#39;</span>, cmap<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;Blues&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>title(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#39;Confusion Matrix (</span><span style=color:#e6db74>{</span>len(unique_classes)<span style=color:#e6db74>}</span><span style=color:#e6db74> classes)&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>ylabel(<span style=color:#e6db74>&#39;True Label Index&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>xlabel(<span style=color:#e6db74>&#39;Predicted Label Index&#39;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>tight_layout()
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>savefig(<span style=color:#e6db74>&#39;confusion_matrix.png&#39;</span>, dpi<span style=color:#f92672>=</span><span style=color:#ae81ff>150</span>, bbox_inches<span style=color:#f92672>=</span><span style=color:#e6db74>&#39;tight&#39;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;Confusion matrix visualization saved as &#39;confusion_matrix.png&#39; (large dataset - no class labels)&#34;</span>)
+</span></span><span style=display:flex><span>        plt<span style=color:#f92672>.</span>close()
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> accuracy, y_pred
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>save_model</span>(model, model_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;random_forest_model.joblib&#34;</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Save the trained model to disk.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        model: Trained RandomForestClassifier
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        model_path: Path to save the model
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>Saving model to </span><span style=color:#e6db74>{</span>model_path<span style=color:#e6db74>}</span><span style=color:#e6db74>...&#34;</span>)
+</span></span><span style=display:flex><span>    joblib<span style=color:#f92672>.</span>dump(model, model_path)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Model saved successfully!&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>load_model</span>(model_path<span style=color:#f92672>=</span><span style=color:#e6db74>&#34;random_forest_model.joblib&#34;</span>):
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Load a trained model from disk.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Args:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        model_path: Path to the saved model
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Returns:
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>        Loaded RandomForestClassifier
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Loading model from </span><span style=color:#e6db74>{</span>model_path<span style=color:#e6db74>}</span><span style=color:#e6db74>...&#34;</span>)
+</span></span><span style=display:flex><span>    model <span style=color:#f92672>=</span> joblib<span style=color:#f92672>.</span>load(model_path)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;Model loaded successfully!&#34;</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> model
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>main</span>():
+</span></span><span style=display:flex><span>    <span style=color:#e6db74>&#34;&#34;&#34;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    Main function to run the complete pipeline.
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>    &#34;&#34;&#34;</span>
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;RANDOM FOREST CLASSIFIER FOR BANKING77 WITH EMBEDDINGS&#34;</span>)
+</span></span><span style=display:flex><span>    print(<span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Configuration</span>
+</span></span><span style=display:flex><span>    TEST_MODE <span style=color:#f92672>=</span> <span style=color:#66d9ef>False</span>  <span style=color:#75715e># Set to False to use full dataset</span>
+</span></span><span style=display:flex><span>    TEST_SAMPLES <span style=color:#f92672>=</span> <span style=color:#ae81ff>200</span>  <span style=color:#75715e># Number of samples to use in test mode</span>
+</span></span><span style=display:flex><span>    DATASET_PATH <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;datasets/banking77_with_embeddings_test&#34;</span>
+</span></span><span style=display:flex><span>    MODEL_PATH <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;random_forest_model.joblib&#34;</span>
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Model parameters</span>
+</span></span><span style=display:flex><span>    N_ESTIMATORS <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span>
+</span></span><span style=display:flex><span>    MAX_DEPTH <span style=color:#f92672>=</span> <span style=color:#66d9ef>None</span>
+</span></span><span style=display:flex><span>    RANDOM_STATE <span style=color:#f92672>=</span> <span style=color:#ae81ff>42</span>
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>if</span> TEST_MODE:
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;⚠️  TEST MODE: Using only </span><span style=color:#e6db74>{</span>TEST_SAMPLES<span style=color:#e6db74>}</span><span style=color:#e6db74> samples per split&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;Set TEST_MODE = False to use the full dataset&#34;</span>)
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>else</span>:
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;Using full dataset&#34;</span>)
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>try</span>:
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 1: Load dataset</span>
+</span></span><span style=display:flex><span>        dataset <span style=color:#f92672>=</span> load_dataset_with_embeddings(DATASET_PATH)
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 2: Prepare data</span>
+</span></span><span style=display:flex><span>        X_train, y_train, X_test, y_test, label_names <span style=color:#f92672>=</span> prepare_data(
+</span></span><span style=display:flex><span>            dataset, test_mode<span style=color:#f92672>=</span>TEST_MODE, test_samples<span style=color:#f92672>=</span>TEST_SAMPLES
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 4: Train model</span>
+</span></span><span style=display:flex><span>        model <span style=color:#f92672>=</span> train_random_forest(
+</span></span><span style=display:flex><span>            X_train, y_train, 
+</span></span><span style=display:flex><span>            n_estimators<span style=color:#f92672>=</span>N_ESTIMATORS,
+</span></span><span style=display:flex><span>            max_depth<span style=color:#f92672>=</span>MAX_DEPTH,
+</span></span><span style=display:flex><span>            random_state<span style=color:#f92672>=</span>RANDOM_STATE,
+</span></span><span style=display:flex><span>            test_mode<span style=color:#f92672>=</span>TEST_MODE
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 5: Evaluate model</span>
+</span></span><span style=display:flex><span>        accuracy, predictions <span style=color:#f92672>=</span> evaluate_model(
+</span></span><span style=display:flex><span>            model, X_test, y_test, label_names, test_mode<span style=color:#f92672>=</span>TEST_MODE
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 6: Save model</span>
+</span></span><span style=display:flex><span>        save_model(model, MODEL_PATH)
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#75715e># Step 7: Summary</span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;SUMMARY&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;=&#34;</span><span style=color:#f92672>*</span><span style=color:#ae81ff>60</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Model: Random Forest&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Dataset: Banking77 with embeddings&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Training samples: </span><span style=color:#e6db74>{</span>len(X_train)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test samples: </span><span style=color:#e6db74>{</span>len(X_test)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Number of classes: </span><span style=color:#e6db74>{</span>len(label_names)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Embedding dimension: </span><span style=color:#e6db74>{</span>X_train<span style=color:#f92672>.</span>shape[<span style=color:#ae81ff>1</span>]<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Test accuracy: </span><span style=color:#e6db74>{</span>accuracy<span style=color:#e6db74>:</span><span style=color:#e6db74>.4f</span><span style=color:#e6db74>}</span><span style=color:#e6db74> (</span><span style=color:#e6db74>{</span>accuracy<span style=color:#f92672>*</span><span style=color:#ae81ff>100</span><span style=color:#e6db74>:</span><span style=color:#e6db74>.2f</span><span style=color:#e6db74>}</span><span style=color:#e6db74>%)&#34;</span>)
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;Model saved to: </span><span style=color:#e6db74>{</span>MODEL_PATH<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>✅ Pipeline completed successfully!&#34;</span>)
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>except</span> <span style=color:#a6e22e>Exception</span> <span style=color:#66d9ef>as</span> e:
+</span></span><span style=display:flex><span>        print(<span style=color:#e6db74>f</span><span style=color:#e6db74>&#34;</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>❌ Error occurred: </span><span style=color:#e6db74>{</span>str(e)<span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;</span>)
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>raise</span> e
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>if</span> __name__ <span style=color:#f92672>==</span> <span style=color:#e6db74>&#34;__main__&#34;</span>:
+</span></span><span style=display:flex><span>    main()
+</span></span></code></pre></div><p>For this small example we are not doing any hypter parameter tuning at all witch would improve the performance.</p><p>The model achieves 95% accuracy across 77 different banking service categories. The balanced nature of the dataset ensures that this 95% accuracy reflects genuine classification ability rather than simply predicting the most common class. With macro and weighted averages both at 0.95, the model demonstrates consistent performance across all banking intents, from card activations to account transfers, making it well-suited for real-world customer service applications.</p><p>These results are similare to the once in <a href=https://www.philschmid.de/fine-tune-modern-bert-in-2025>Fine-tune classifier with ModernBERT in 2025</a> showing the power of using a strong embedding mode with a lightweight classifer.</p></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2025 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
