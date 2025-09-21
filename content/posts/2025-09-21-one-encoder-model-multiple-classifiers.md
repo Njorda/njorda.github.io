@@ -9,37 +9,37 @@ image: "/img/background_2022_07_17.png"
 ---
 
 
-In this example we will go over how to build a text classifier using an text embedding api. This article is inspierd by [Fine-tune classifier with ModernBERT in 2025](https://www.philschmid.de/fine-tune-modern-bert-in-2025)
+In this example, we will go over how to build a text classifier using a text embedding API. This article is inspired by [Fine-tune classifier with ModernBERT in 2025](https://www.philschmid.de/fine-tune-modern-bert-in-2025)
+
 ```
 Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential.
 ```
-But instead of running an encoder model locally we will utalize an api to get embeddings and then train a small classifier. This will create a very lightweight setup. Where you can build multiple classifiers on top of one encoder.
+
+But instead of running an encoder model locally, we will utilize an API to get embeddings and then train a small classifier. This will create a very lightweight setup where you can build multiple classifiers on top of one encoder.
 
 ![One encoder model multiple classifiers](/img/embedding_architecture_diagram.svg)
 
 The diagram above illustrates the key advantage of our approach:
 
-Traditional Setup: Each classifier requires its own fine-tuned model running on expensive GPU infrastructure
-Our Approach: One centralized encoder model provides embeddings via API to multiple lightweight CPU-based classifiers
+**Traditional Setup:** Each classifier requires its own fine-tuned model running on expensive GPU infrastructure
+
+**Our Approach:** One centralized encoder model provides embeddings via API to multiple lightweight CPU-based classifiers
 
 This architecture provides several benefits:
 
-💡 Lower Costs: Reduced GPU infrastructure requirements
-🎯 Centralized Management: Single point of maintenance for the encoder
-🔧 Easy Scaling: Add new classifiers without additional GPU resources
-
+💡 **Lower Costs:** Reduced GPU infrastructure requirements  
+🎯 **Centralized Management:** Single point of maintenance for the encoder  
+🔧 **Easy Scaling:** Add new classifiers without additional GPU resources
 
 While this API-based approach offers significant advantages, there are some important considerations:
 
-- **Latency**: API calls add network delay compared to local inference
-- **Embedding Model Lock-in**: Changing the embedding model requires retraining all classifiers
-- **Dependency**: Requires stable internet and API availability
-- **No Fine-tuning Control**:  Can't optimize the encoder for your specific domain/task
-- **Version Dependencies**: API updates to the embedding model could break existing classifiers
+- **Latency:** API calls add network delay compared to local inference
+- **Embedding Model Lock-in:** Changing the embedding model requires retraining all classifiers
+- **Dependency:** Requires stable internet and API availability
+- **No Fine-tuning Control:** Can't optimize the encoder for your specific domain/task
+- **Version Dependencies:** API updates to the embedding model could break existing classifiers
 
-
-Ok what that said lets start building! We will use the same dataset as the article linked above. [Banking77Classification
-](https://huggingface.co/datasets/mteb/banking77), it has what wee neeed. A text and a lable. First step is to download the dataset and add embeddings to the dataset, one embedding for each text. In this example we will use gemini(gcp) to create the embeddings but you can use any embedding api you want. However rembert that diffrent embeddings will give diffrent embeddings and that might effect you end performance. 
+Okay, with that said, let's start building! We will use the same dataset as the article linked above: [Banking77Classification](https://huggingface.co/datasets/mteb/banking77). It has what we need—a text and a label. The first step is to download the dataset and add embeddings to the dataset, one embedding for each text. In this example, we will use Gemini (GCP) to create the embeddings, but you can use any embedding API you want. However, remember that different embeddings will give different results, and that might affect your end performance.
 
 ```python 
 
@@ -319,11 +319,9 @@ def convert_to_huggingface_dataset(dataset_with_embeddings):
 main()
 
 ```
+This code will read the dataset and add embeddings to each text field. It will send batches of text to the API to improve latency and, in this case, also lower the cost (lower cost per token for batch requests). However, for Gemini and my quota, there is a maximum of 100 text snippets in each request. Finally, we store the new dataset on disk so we don't have to recreate it. If you want to optimize the code in the future, you can update it to run async—this would speed it up; however, make sure you have the quota/API limits to support it.
 
-This code will read the dataset and add embeddings to each text feild, it will send batches of text to the api to improve latency and in this case also lower the cost(lower cost per token for batch). However for gemini and my quota there is a max of 100 text snippets in each request. Finally we store the new dataset on disk so we don't have to reacreate it. If you future want to optimize the code you can update it to run ascync, this would speed it up however make sure you have the quota/api to support it. 
-
-
-The nex step is to buiild the classifier. There are multiple types of model that would work fine but a good starting point is normaly random forest below are some properties of it. 
+The next step is to build the classifier. There are multiple types of models that would work fine, but a good starting point is normally Random Forest. Below are some of its properties:
 
 - **Minimal preprocessing required** - Unlike many algorithms, Random Forest handles mixed data types (numerical and categorical) well without extensive feature scaling or encoding. It's also relatively robust to outliers and missing values.
 - **Built-in feature selection** - The algorithm provides feature importance scores automatically, helping you understand which variables matter most for your predictions. This insight is valuable for both model interpretation and feature engineering.
@@ -334,10 +332,9 @@ The nex step is to buiild the classifier. There are multiple types of model that
 - **Computationally reasonable** - While not the fastest algorithm, Random Forest trains relatively quickly and can handle moderately large datasets without specialized hardware.
 - **Interpretable foundation** - Though not as interpretable as a single decision tree, Random Forest is more explainable than black-box methods like neural networks, making it easier to validate and trust your initial results.
 
-Of course it has some draw backs where the biggest one is that I can struggel with higly inbalanced datasets. However in our case that is not a problem. Compared to other model types it is slow a prediction times since we will have to travears multiple trees but for this case it is fine. 
+Of course, it has some drawbacks, where the biggest one is that it can struggle with highly imbalanced datasets. However, in our case, that is not a problem. Compared to other model types, it is slow at prediction time since we will have to traverse multiple trees, but for this case, it is fine.
 
-
-Below is the code for training a random forest model. 
+Below is the code for training a Random Forest model. 
 ```python 
 
 import numpy as np
@@ -668,10 +665,9 @@ if __name__ == "__main__":
     main()
 
 ```
-For this small example we are not doing any hypter parameter tuning at all witch would improve the performance. 
+For this small example, we are not doing any hyperparameter tuning at all, which would improve the performance.
 
 The model achieves 95% accuracy across 77 different banking service categories. The balanced nature of the dataset ensures that this 95% accuracy reflects genuine classification ability rather than simply predicting the most common class. With macro and weighted averages both at 0.95, the model demonstrates consistent performance across all banking intents, from card activations to account transfers, making it well-suited for real-world customer service applications.
 
-These results are similare to the once in [Fine-tune classifier with ModernBERT in 2025
-](https://www.philschmid.de/fine-tune-modern-bert-in-2025) showing the power of using a strong embedding mode with a lightweight classifer. 
+These results are similar to the ones in [Fine-tune classifier with ModernBERT in 2025](https://www.philschmid.de/fine-tune-modern-bert-in-2025), showing the power of using a strong embedding model with a lightweight classifier.
 
