@@ -11,7 +11,7 @@ image: "/img/background_2022_07_17.png"
 
 In this example, we will go over how to build a text classifier using a text embedding API. This article is inspired by [Fine-tune classifier with ModernBERT in 2025](https://www.philschmid.de/fine-tune-modern-bert-in-2025)
 
-```
+```bash
 Large Language Models (LLMs) have become ubiquitous in 2024. However, smaller, specialized models - particularly for classification tasks - remain critical for building efficient and cost-effective AI systems. One key use case is routing user prompts to the most appropriate LLM or selecting optimal few-shot examples, where fast, accurate classification is essential.
 ```
 
@@ -26,16 +26,15 @@ The diagram above illustrates the key advantage of our approach:
 **Our Approach:** One centralized encoder model provides embeddings via API to multiple lightweight CPU-based classifiers
 
 This architecture provides several benefits:
-
-💡 **Lower Costs:** Reduced GPU infrastructure requirements  
-🎯 **Centralized Management:** Single point of maintenance for the encoder  
-🔧 **Easy Scaling:** Add new classifiers without additional GPU resources
+**Lower Costs:** Reduced GPU infrastructure requirements  
+**Centralized Management:** Single point of maintenance for the encoder  
+**Easy Scaling:** Add new classifiers without additional GPU resources
 
 While this API-based approach offers significant advantages, there are some important considerations:
 
 - **Latency:** API calls add network delay compared to local inference
 - **Embedding Model Lock-in:** Changing the embedding model requires retraining all classifiers
-- **Dependency:** Requires stable internet and API availability
+- **Dependency:** Requires stable API availability
 - **No Fine-tuning Control:** Can't optimize the encoder for your specific domain/task
 - **Version Dependencies:** API updates to the embedding model could break existing classifiers
 
@@ -158,10 +157,10 @@ def add_embeddings_to_dataset(dataset, text_column="text", batch_size=50, test_m
             subset_data = {key: split_data[key][:len(all_embeddings)] for key in split_data.features}
             subset_data['embedding'] = all_embeddings
             return subset_data
-        else:
-            # Add embeddings to full dataset
-            split_data = split_data.add_column('embedding', all_embeddings)
-            return split_data
+
+        # Add embeddings to full dataset
+        split_data = split_data.add_column('embedding', all_embeddings)
+        return split_data
 
     # Process each split
     processed_dataset = {}
@@ -209,9 +208,6 @@ def main():
     print("\n" + "=" * 50)
     print("Saving dataset with embeddings...")
     print("=" * 50)
-
-    # Convert to Hugging Face Dataset format if needed
-    from datasets import Dataset, DatasetDict
 
     final_dataset = DatasetDict({
         split: Dataset.from_dict(data) if isinstance(data, dict) else data
