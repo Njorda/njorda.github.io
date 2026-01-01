@@ -1,0 +1,104 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Cutile kernel in pytorch - Njord tech blog</title><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="In this blog post will we try to play around with one of Nvidias latest releases that seems to be the next progression interms of writing Cuda Kernels, cuTile.
+A youtube video tutorial can also be found here and a deep dive in the arch and background here
+The official release docs of cuTile is avialble here but the possibly better intro to it is here with the tldr:
+| NVIDIA Finally Adds Native Python Support to CUDA"><meta property="og:image" content><meta property="og:title" content="Cutile kernel in pytorch"><meta property="og:description" content="In this blog post will we try to play around with one of Nvidias latest releases that seems to be the next progression interms of writing Cuda Kernels, cuTile.
+A youtube video tutorial can also be found here and a deep dive in the arch and background here
+The official release docs of cuTile is avialble here but the possibly better intro to it is here with the tldr:
+| NVIDIA Finally Adds Native Python Support to CUDA"><meta property="og:type" content="article"><meta property="og:url" content="https://www.njordy.com/2025/12/14/cuTile/"><meta property="article:section" content="posts"><meta property="article:published_time" content="2025-12-14T00:00:00+00:00"><meta property="article:modified_time" content="2025-12-14T00:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Cutile kernel in pytorch"><meta name=twitter:description content="In this blog post will we try to play around with one of Nvidias latest releases that seems to be the next progression interms of writing Cuda Kernels, cuTile.
+A youtube video tutorial can also be found here and a deep dive in the arch and background here
+The official release docs of cuTile is avialble here but the possibly better intro to it is here with the tldr:
+| NVIDIA Finally Adds Native Python Support to CUDA"><link href=https://www.njordy.com/css/fonts.2c2227b81b1970a03e760aa2e6121cd01f87c88586803cbb282aa224720a765f.css rel=stylesheet><link rel=stylesheet type=text/css media=screen href=https://www.njordy.com/css/main.ac08a4c9714baa859217f92f051deb58df2938ec352b506df655005dcaf98cc0.css></head><body><div class=content><header><div class=main><a href=https://www.njordy.com/>Njord tech blog</a></div><nav><a href=../../../../>Home</a>
+<a href=../../../../posts>All posts</a>
+<a href=../../../../about>About</a></nav></header><main><article><div class=title><h1 class=title>Cutile kernel in pytorch</h1><div class=meta>Posted on Dec 14, 2025</div></div><section class=body><p>In this blog post will we try to play around with one of Nvidias latest releases that seems to be the next progression interms of writing Cuda Kernels, <a href=https://github.com/NVIDIA/cutile-python>cuTile</a>.</p><p>A youtube video tutorial can also be found <a href="https://www.youtube.com/watch?v=YFrP03KuMZ8">here</a> and a deep dive in the arch and background <a href="https://www.youtube.com/watch?v=uZTtViomW6w&t=2s">here</a></p><p>The official release docs of cuTile is avialble <a href=https://docs.nvidia.com/cuda/cutile-python/>here</a> but the possibly better intro to it is <a href=https://thenewstack.io/nvidia-finally-adds-native-python-support-to-cuda/>here</a> with the tldr:</p><p>| NVIDIA Finally Adds Native Python Support to CUDA</p><p>That is also one of the key take aways, the second key take way of cuTile is the core of how things are set up in terms of the programing model. It is expressed as &ldquo;the key in cuTile is operations done on arrays&rdquo; the effect of this is that kernels are developed slightly different than from Cuda code where the mental model is about &ldquo;threads&rdquo;. This allows developers to write code that is slightly more high level and cuTile take care of mapping tiles to cuda threads. Kind of the goal for cuTile is to allow you as a developer to focuse on the kernel and dont have to focuse on the GPU hardware specifics.</p><p>While this sounds good, lets try it out and see the difference instead.</p><p>Feel free to use any GPU based upon Blackwell, I will do it through <a href=https://www.runpod.io>RunPod</a></p><h1 id=set-up-runpod>Set up RunPod</h1><p>In order to use RunPod for this we need to get Cuda version 13.0 or above, as of 2025-12-14 that is rathere rare to find on any of the prebuilt stuff. So we wil make our own image, I will not go in to depth on the image or the different things and instead leave you to check out <a href=https://github.com/runpod/containers/blob/main/container-template/start.sh>this example</a> that we built on top of:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Docker data-lang=Docker><span style=display:flex><span><span style=color:#66d9ef>FROM</span><span style=color:#e6db74> nvidia/cuda:13.1.0-devel-ubuntu24.04</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e># Install SSH server (for RunPod &#34;SSH&#34; connect option)</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> apt-get update <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    <span style=color:#f92672>&amp;&amp;</span> DEBIAN_FRONTEND<span style=color:#f92672>=</span>noninteractive apt-get install -y --no-install-recommends <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>        openssh-server <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    <span style=color:#f92672>&amp;&amp;</span> rm -rf /var/lib/apt/lists/* <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    <span style=color:#f92672>&amp;&amp;</span> mkdir -p /run/sshd<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e># Make root SSH login possible inside the container (RunPod commonly connects as root)</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> sed -i <span style=color:#e6db74>&#39;s/^#\?PermitRootLogin.*/PermitRootLogin yes/&#39;</span> /etc/ssh/sshd_config <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    <span style=color:#f92672>&amp;&amp;</span> sed -i <span style=color:#e6db74>&#39;s/^#\?PasswordAuthentication.*/PasswordAuthentication no/&#39;</span> /etc/ssh/sshd_config <span style=color:#ae81ff>\
+</span></span></span><span style=display:flex><span><span style=color:#ae81ff></span>    <span style=color:#f92672>&amp;&amp;</span> sed -i <span style=color:#e6db74>&#39;s/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/&#39;</span> /etc/ssh/sshd_config<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>COPY</span> start.sh /start.sh<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> chmod +x /start.sh<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> apt-get update <span style=color:#f92672>&amp;&amp;</span> apt-get install -y curl<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> pip install torchcodec<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> pip install bentoml<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>#RUN pip install speechbrain</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>RUN</span> pip install pyannote.audio<span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e># Optional: RunPod/SSH (22) and Jupyter (8888)</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>EXPOSE</span><span style=color:#e6db74> 22 8888</span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010>
+</span></span></span><span style=display:flex><span><span style=color:#960050;background-color:#1e0010></span><span style=color:#66d9ef>CMD</span> [<span style=color:#e6db74>&#34;/start.sh&#34;</span>]<span style=color:#960050;background-color:#1e0010>
+</span></span></span></code></pre></div><h1 id=cutile-vs-cuda>Cutile Vs Cuda</h1><ul><li>Jeremy howard how he run Cuda with python.</li><li>We can take his example and do it in Cuda VS cuTile to see the difference in the code.</li></ul><p>As an learning example and compare we will do the lectures from <a href=https://en.wikipedia.org/wiki/Jeremy_Howard_(entrepreneur)>Jermey Howard</a> in the <a href=https://github.com/gpu-mode/lectures/blob/main/lecture_003/pmpp.ipynb>GPU mode series</a></p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#a6e22e>@ct.kernel</span>()
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> (a, c, tn: ConstInt, tm: ConstInt):
+</span></span><span style=display:flex><span>    row_block <span style=color:#f92672>=</span> ct<span style=color:#f92672>.</span>bid(<span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>    col_block <span style=color:#f92672>=</span> ct<span style=color:#f92672>.</span>bid(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># 2. Load a 3D Tile of RGB data</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Shape is (16, 16, 3) -&gt; 16x16 pixels, 3 channels each</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Index is (row_block, col_block, 0) -&gt; Start at the correct spatial block, channel 0</span>
+</span></span><span style=display:flex><span>    rgb_tile <span style=color:#f92672>=</span> ct<span style=color:#f92672>.</span>load(
+</span></span><span style=display:flex><span>        input_rgb, 
+</span></span><span style=display:flex><span>        index<span style=color:#f92672>=</span>(row_block, col_block, <span style=color:#ae81ff>0</span>), 
+</span></span><span style=display:flex><span>        shape<span style=color:#f92672>=</span>(tm, tn, <span style=color:#ae81ff>3</span>)
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># 3. Extract Channels</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Slice the tile to get separate R, G, B planes</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># shape becomes (16, 16) for each</span>
+</span></span><span style=display:flex><span>    r <span style=color:#f92672>=</span> rgb_tile[:, :, <span style=color:#ae81ff>0</span>]
+</span></span><span style=display:flex><span>    g <span style=color:#f92672>=</span> rgb_tile[:, :, <span style=color:#ae81ff>1</span>]
+</span></span><span style=display:flex><span>    b <span style=color:#f92672>=</span> rgb_tile[:, :, <span style=color:#ae81ff>2</span>]
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># 4. Compute Greyscale (Element-wise math)</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># cuTile handles the broadcasting and element-wise ops automatically</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># This should be broadcasted according to Cutile</span>
+</span></span><span style=display:flex><span>    grey_tile <span style=color:#f92672>=</span> (r <span style=color:#f92672>*</span> R_WEIGHT) <span style=color:#f92672>+</span> (g <span style=color:#f92672>*</span> G_WEIGHT) <span style=color:#f92672>+</span> (b <span style=color:#f92672>*</span> B_WEIGHT)
+</span></span><span style=display:flex><span>    grey_tile <span style=color:#f92672>=</span> ct<span style=color:#f92672>.</span>reshape(original_tile, shape<span style=color:#f92672>=</span>(tm, tn))
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e># 5. Store the 2D Result</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Output is just (Height, Width), so we store a (16, 16) tile</span>
+</span></span><span style=display:flex><span>    ct<span style=color:#f92672>.</span>store(
+</span></span><span style=display:flex><span>        output_grey, 
+</span></span><span style=display:flex><span>        index<span style=color:#f92672>=</span>(row_block, col_block), 
+</span></span><span style=display:flex><span>        tile<span style=color:#f92672>=</span>grey_tile
+</span></span><span style=display:flex><span>    )
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>def</span> <span style=color:#a6e22e>rgb_grey</span>():
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Tile is how we split the input image in to smaller sizes ... </span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    M, N <span style=color:#f92672>=</span> a<span style=color:#f92672>.</span>shape  <span style=color:#75715e># Get rows (M) and columns (N) of the matrix</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># Heuristic for 2D TILE sizes:</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># TILE_Y is chosen as a power of 2, up to 1024, based on the column dimension.</span>
+</span></span><span style=display:flex><span>    TILE_Y <span style=color:#f92672>=</span> min(<span style=color:#ae81ff>1024</span>, <span style=color:#ae81ff>2</span> <span style=color:#f92672>**</span> math<span style=color:#f92672>.</span>ceil(math<span style=color:#f92672>.</span>log2(N))) <span style=color:#66d9ef>if</span> N <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span> <span style=color:#66d9ef>else</span> <span style=color:#ae81ff>1</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># TILE_X is derived to keep the total elements processed by a block</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># (TILE_X * TILE_Y) around 1024 (a common block size limit for threads).</span>
+</span></span><span style=display:flex><span>    TILE_X <span style=color:#f92672>=</span> max(<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>1024</span> <span style=color:#f92672>//</span> TILE_Y)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># This is the compute matrix .. </span>
+</span></span><span style=display:flex><span>    grid <span style=color:#f92672>=</span> (math<span style=color:#f92672>.</span>ceil(M <span style=color:#f92672>/</span> TILE_X), math<span style=color:#f92672>.</span>ceil(N <span style=color:#f92672>/</span> TILE_Y), <span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    c <span style=color:#f92672>=</span> torch<span style=color:#f92672>.</span>empty_like(a)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># TIles are not correct, we overlap it atm ...</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># We need to consider the 16x1 we have atm and not utalisze it</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#</span>
+</span></span><span style=display:flex><span>    ct<span style=color:#f92672>.</span>launch(torch<span style=color:#f92672>.</span>cuda<span style=color:#f92672>.</span>current_stream(), grid, kernel, (a, c, TILE_X, TILE_Y))
+</span></span></code></pre></div><h1 id=cutile-with-pytorch>cuTile with Pytorch</h1><h1 id=cutile-deployed-on-triton-server>cuTile deployed on Triton Server</h1></section><div class=post-tags></div></article></main><footer><div style=display:flex></div><div class=footer-info>2026 <a href=https://github.com/athul/archie>Archie Theme</a> | Built with <a href=https://gohugo.io>Hugo</a></div></footer></div></body></html>
