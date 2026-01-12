@@ -27,9 +27,10 @@ func main() {
 // Struct to keep the tool definitions
 // The json tags are kind of important to keep the tool descriptions complete to the LLM.
 type tool struct {
-	Name     string                      `json:"name"`
-	Function func(args ...string) string `json:"-"`
-	Args     []string                    `json:"args"`
+	Name        string                      `json:"name"`
+	Function    func(args ...string) string `json:"-"`
+	Args        []string                    `json:"args"`
+	Description string                      `json:"description"`
 }
 
 // The struct for the LLM
@@ -53,19 +54,22 @@ func NewAgent(ctx context.Context, apiKey string) (*agent, error) {
 
 var tools = map[string]tool{
 	"read": {
-		Name:     "read",
-		Function: read,
-		Args:     []string{"fileName"},
+		Name:        "read",
+		Function:    read,
+		Description: "Read the contents of a file, use this tool a lot in order to check content, often after listing the contentn to know what is available to edit",
+		Args:        []string{"fileName"},
 	},
 	"edit": {
-		Name:     "edit",
-		Function: edit,
-		Args:     []string{"fileName", "oldCode", "newCode"},
+		Name:        "edit",
+		Description: "Edit the contents of a file",
+		Function:    edit,
+		Args:        []string{"fileName", "oldCode", "newCode"},
 	},
 	"list": {
-		Name:     "list",
-		Function: list,
-		Args:     []string{"fileName"},
+		Name:        "list",
+		Description: "List the contents of a directory",
+		Function:    list,
+		Args:        []string{"fileName"},
 	},
 }
 
@@ -92,6 +96,8 @@ func (a *agent) getSystemPrompt() (string, error) {
 	Use the EXACT argument names from the tool definitions above as JSON keys.
 	Use compact single-line JSON with double quotes. After receiving a tool_result(...) message, continue the task.
 	If no tool is needed, respond normally.
+
+	Follow the format and invoke a tool with 'tool: TOOL_NAME({"arg1":"value1"})'
 	`, toolNames), nil
 }
 
@@ -107,7 +113,7 @@ func read(args ...string) string {
 }
 
 func edit(args ...string) string {
-	if len(args) == 3 {
+	if len(args) != 3 {
 		return fmt.Errorf("error: fileName, old code and new code are required in order to do string replacement").Error()
 	}
 	content, err := os.ReadFile(args[0])
@@ -116,12 +122,15 @@ func edit(args ...string) string {
 	}
 
 	newContent := strings.Replace(string(content), args[1], args[2], 1)
+	if err := os.WriteFile(args[0], []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write file: %v", err).Error()
+	}
 
 	return string(newContent)
 }
 
 func list(args ...string) string {
-	fmt.Println("Listing...")
+
 	files, err := os.ReadDir(".")
 	if err != nil {
 		return fmt.Errorf("failed to read directory: %v", err).Error()
@@ -133,11 +142,22 @@ func list(args ...string) string {
 	return strings.Join(fileNames, "\n")
 }
 
+func sanitizeJSONString(s string) string {
+	// Escape literal control characters that the LLM might put in JSON strings
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	return s
+}
+
 func toolArgs(toolArgsJSON string, expectedArgs []string) ([]string, error) {
 	var args []string
 	if toolArgsJSON == "" || toolArgsJSON == "{}" {
 		return args, nil
 	}
+
+	// Sanitize the JSON to escape control characters
+	toolArgsJSON = sanitizeJSONString(toolArgsJSON)
 
 	// Parse the JSON into a map
 	var argsMap map[string]string
@@ -188,6 +208,7 @@ func (a *agent) agenLoop() error {
 			previousResponse = append(previousResponse, response.Candidates[0].Content)
 
 			if strings.HasPrefix(responseText, "tool:") {
+				fmt.Println("Calling tool...")
 				// Extract tool name
 				toolName := strings.Split(responseText, "tool:")[1]
 				toolName = strings.Split(toolName, "(")[0]
@@ -209,7 +230,7 @@ func (a *agent) agenLoop() error {
 				// Parse args
 				parsedArgs, err := toolArgs(argsJSON, tool.Args)
 				if err != nil {
-					return fmt.Errorf("failed to parse tool args: %v", err)
+					return fmt.Errorf("failed to parse tool args: %v argsJSON: %v", err, argsJSON)
 				}
 
 				result := tool.Function(parsedArgs...)
