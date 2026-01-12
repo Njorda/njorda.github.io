@@ -20,7 +20,7 @@ docker run -it --rm \
   -v $(pwd)/go/code:/app \
   -e GEMINI_API_KEY=$GEMINI_API_KEY \
   -w /app \
-  golang:1.21 \
+  golang:1.25 \
   go run main.go
 ```
 

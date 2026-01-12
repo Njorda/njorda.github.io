@@ -13,7 +13,6 @@ import (
 
 func main() {
 	// This starts the main loop of the agent.
-	fmt.Println("Hello, World!")
 	agent, err := NewAgent(context.Background(), os.Getenv("GEMINI_API_KEY"))
 	if err != nil {
 		panic(err)
@@ -182,7 +181,7 @@ func (a *agent) agenLoop() error {
 	previousResponse := []*genai.Content{}
 	for {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter a command: ")
+		fmt.Print("Question: ")
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read command: %v", err)
